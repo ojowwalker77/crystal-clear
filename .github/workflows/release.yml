@@ -1,0 +1,122 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-cli:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: crystal-linux-x86_64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact: crystal-linux-aarch64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: crystal-macos-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: crystal-macos-aarch64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: crystal-windows-x86_64.exe
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (Linux ARM)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename binary (Unix)
+        if: runner.os != 'Windows'
+        run: mv target/${{ matrix.target }}/release/crystal ${{ matrix.artifact }}
+
+      - name: Rename binary (Windows)
+        if: runner.os == 'Windows'
+        run: mv target/${{ matrix.target }}/release/crystal.exe ${{ matrix.artifact }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  build-macos-app:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Build XCFramework
+        run: make xcframework
+
+      - name: Build macOS App
+        run: |
+          xcodebuild -project crystalclear/crystalclear.xcodeproj \
+            -scheme crystalclear \
+            -configuration Release \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Package App
+        run: |
+          cd build/DerivedData/Build/Products/Release
+          zip -r ../../../../../CrystalClear-macOS.zip crystalclear.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CrystalClear-macOS.zip
+          path: build/CrystalClear-macOS.zip
+
+  release:
+    needs: [build-cli, build-macos-app]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/crystal-linux-x86_64/crystal-linux-x86_64
+            artifacts/crystal-linux-aarch64/crystal-linux-aarch64
+            artifacts/crystal-macos-x86_64/crystal-macos-x86_64
+            artifacts/crystal-macos-aarch64/crystal-macos-aarch64
+            artifacts/crystal-windows-x86_64.exe/crystal-windows-x86_64.exe
+            artifacts/CrystalClear-macOS.zip/CrystalClear-macOS.zip
+          generate_release_notes: true

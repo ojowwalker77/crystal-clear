@@ -1,0 +1,4 @@
+module crystal_clear_coreFFI {
+    header "crystal_clear_coreFFI.h"
+    export *
+}

@@ -1,0 +1,202 @@
+// Crystal Clear FFI Interface Definition
+// This UDL file defines the types and functions exposed to Swift via UniFFI
+
+namespace crystal_clear {
+    // Scanning
+    sequence<FFIScanResult> scan_all_categories(FFIScanOptions options);
+    FFIScanResult scan_category(string category_id, FFIScanOptions options);
+
+    // Applications
+    sequence<FFIInstalledApp> scan_applications();
+
+    // Large Files Scanner
+    sequence<FFICleanableItem> scan_large_files(FFILargeFileScanOptions options);
+
+    // Duplicates Scanner
+    FFIDuplicateScanResult scan_duplicates(FFIDuplicateScanOptions options);
+
+    // Downloads Scanner
+    FFIDownloadsScanResult scan_downloads(FFIDownloadsScanOptions options);
+
+    // Cleaning
+    FFICleanResult clean_items(sequence<string> paths, FFICleanOptions options);
+    FFICleanResult uninstall_app(string app_path, boolean include_leftovers);
+
+    // Disk info
+    FFIDiskInfo? get_root_disk_info();
+    sequence<FFIDiskInfo> get_all_disk_info();
+
+    // Validation
+    boolean is_protected_path(string path);
+
+    // Utilities
+    string format_size(u64 bytes);
+    sequence<FFICleanerInfo> get_available_cleaners();
+};
+
+// Enums
+
+[Enum]
+interface FFIItemType {
+    File();
+    Directory();
+    Symlink();
+};
+
+[Enum]
+interface FFIRiskLevel {
+    Low();
+    Medium();
+    High();
+};
+
+[Enum]
+interface FFICleanerCategory {
+    System();
+    Developer();
+    Apps();
+};
+
+[Enum]
+interface FFIDownloadCategory {
+    OldFiles();
+    Archives();
+    LargeMedia();
+    Documents();
+    Installers();
+    Other();
+};
+
+// Records (structs)
+
+dictionary FFIScanOptions {
+    boolean dry_run;
+    u32 keep_recent_days;
+    u64? min_size;
+    u32? max_items;
+};
+
+dictionary FFICleanOptions {
+    boolean dry_run;
+    boolean force;
+};
+
+dictionary FFICleanableItem {
+    string path;
+    u64 size;
+    FFIItemType item_type;
+    u32? age_days;
+    string description;
+    boolean requires_force;
+    FFIRiskLevel risk_level;
+};
+
+dictionary FFIScanResult {
+    string category;
+    string category_name;
+    sequence<FFICleanableItem> items;
+    u64 total_size;
+    u64 scan_duration_ms;
+    sequence<string> errors;
+};
+
+dictionary FFICleanResult {
+    string category;
+    u32 items_cleaned;
+    u64 bytes_freed;
+    sequence<FFICleanFailure> failures;
+    u64 clean_duration_ms;
+};
+
+dictionary FFICleanFailure {
+    string path;
+    string reason;
+};
+
+dictionary FFIInstalledApp {
+    string name;
+    string path;
+    u64 size;
+    string? bundle_id;
+    sequence<string> leftover_paths;
+    u64 leftover_size;
+};
+
+dictionary FFIDiskInfo {
+    string name;
+    string mount_point;
+    string device_node;
+    string filesystem;
+    u64 total_bytes;
+    u64 used_bytes;
+    u64 free_bytes;
+};
+
+dictionary FFICleanerInfo {
+    string id;
+    string name;
+    string description;
+    FFICleanerCategory category;
+    boolean available;
+};
+
+// Large Files Scanner
+
+dictionary FFILargeFileScanOptions {
+    u64 min_size_bytes;
+    u32 max_results;
+    boolean include_hidden;
+};
+
+// Duplicates Scanner
+
+dictionary FFIDuplicateScanOptions {
+    u64 min_size_bytes;
+    u32 max_groups;
+};
+
+dictionary FFIDuplicateGroup {
+    string hash;
+    u64 size;
+    u64 wasted_size;
+    sequence<string> paths;
+    u32 count;
+};
+
+dictionary FFIDuplicateScanResult {
+    sequence<FFIDuplicateGroup> groups;
+    u64 total_wasted;
+    u64 files_scanned;
+};
+
+// Downloads Scanner
+
+dictionary FFIDownloadsScanOptions {
+    u32 old_threshold_days;
+    boolean include_hidden;
+};
+
+dictionary FFICategorySize {
+    FFIDownloadCategory category;
+    u64 size;
+};
+
+dictionary FFIDownloadsScanResult {
+    sequence<FFICleanableItem> items;
+    u64 total_size;
+    sequence<FFICategorySize> size_by_category;
+};
+
+// Errors
+
+[Error]
+enum FFIError {
+    "ProtectedPath",
+    "BoundaryEscape",
+    "PermissionDenied",
+    "PathNotFound",
+    "TrashFailed",
+    "ScanFailed",
+    "CleanFailed",
+    "ConfigError",
+};

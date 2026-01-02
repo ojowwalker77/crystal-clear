@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)",
+      "Bash(ls:*)",
+      "Bash(git remote add:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(git fetch:*)",
+      "Bash(git stash:*)",
+      "Bash(git pull:*)",
+      "Bash(git reset:*)",
+      "Bash(git update-ref:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(gh run list:*)",
+      "Bash(wc:*)",
+      "Bash(chmod:*)",
+      "Bash(./scripts/build-xcframework.sh:*)",
+      "Bash(source:*)",
+      "Bash(rustc:*)",
+      "Bash(make:*)",
+      "Bash(xcodebuild -version:*)",
+      "Bash(xcode-select:*)",
+      "Bash(cat:*)",
+      "Bash(xcodebuild:*)",
+      "Bash(brew uninstall:*)",
+      "Bash(open:*)",
+      "Bash(pkill:*)",
+      "Bash(git rm:*)",
+      "Bash(git checkout:*)"
+    ]
+  }
+}
