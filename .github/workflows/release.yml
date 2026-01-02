@@ -11,6 +11,7 @@ env:
 jobs:
   build-cli:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -47,6 +48,8 @@ jobs:
 
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
       - name: Rename binary (Unix)
         if: runner.os != 'Windows'
@@ -89,13 +92,13 @@ jobs:
       - name: Package App
         run: |
           cd build/DerivedData/Build/Products/Release
-          zip -r ../../../../../CrystalClear-macOS.zip crystalclear.app
+          zip -r CrystalClear-macOS.zip crystalclear.app
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: CrystalClear-macOS.zip
-          path: build/CrystalClear-macOS.zip
+          path: build/DerivedData/Build/Products/Release/CrystalClear-macOS.zip
 
   release:
     needs: [build-cli, build-macos-app]
