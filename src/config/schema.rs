@@ -11,6 +11,8 @@ pub struct Config {
     pub general: GeneralConfig,
     /// Safety settings.
     pub safety: SafetyConfig,
+    /// TUI-specific settings.
+    pub tui: TuiConfig,
     /// Category-specific settings.
     pub categories: CategoryConfigs,
     /// Paths to always exclude from cleaning.
@@ -49,6 +51,20 @@ pub struct SafetyConfig {
     pub audit_enabled: bool,
     /// Audit log retention in days.
     pub audit_retention_days: u32,
+}
+
+/// TUI-specific settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TuiConfig {
+    /// Hide zero-byte rows by default.
+    pub hide_zero_byte_items: bool,
+    /// Show clean report overlay when a clean operation completes.
+    pub show_clean_report_on_complete: bool,
+    /// Number of parallel scan workers (0 = auto).
+    pub scan_parallelism: u8,
+    /// Style used for confirm key hints.
+    pub confirm_keys_hint_style: String,
 }
 
 /// Category-specific configurations.
@@ -157,6 +173,7 @@ impl Default for Config {
         Self {
             general: GeneralConfig::default(),
             safety: SafetyConfig::default(),
+            tui: TuiConfig::default(),
             categories: CategoryConfigs::default(),
             exclusions: Vec::new(),
         }
@@ -184,6 +201,17 @@ impl Default for SafetyConfig {
             protected_paths: Vec::new(),
             audit_enabled: true,
             audit_retention_days: 90,
+        }
+    }
+}
+
+impl Default for TuiConfig {
+    fn default() -> Self {
+        Self {
+            hide_zero_byte_items: true,
+            show_clean_report_on_complete: true,
+            scan_parallelism: 0,
+            confirm_keys_hint_style: "explicit".to_string(),
         }
     }
 }

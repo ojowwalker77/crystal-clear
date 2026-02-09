@@ -22,10 +22,7 @@ impl DiskInfoProvider {
     pub fn get_disk_info(mount_point: &str) -> Option<DiskInfo> {
         use std::process::Command;
 
-        let output = Command::new("df")
-            .args(["-k", mount_point])
-            .output()
-            .ok()?;
+        let output = Command::new("df").args(["-k", mount_point]).output().ok()?;
 
         if !output.status.success() {
             return None;
@@ -49,8 +46,8 @@ impl DiskInfoProvider {
         let used_kb = total_kb.saturating_sub(available_kb);
 
         // Get filesystem type from /proc/mounts
-        let filesystem = Self::get_linux_filesystem(&device_node)
-            .unwrap_or_else(|| "Unknown".to_string());
+        let filesystem =
+            Self::get_linux_filesystem(&device_node).unwrap_or_else(|| "Unknown".to_string());
 
         // Get volume name - use mount point base name
         let name = std::path::Path::new(mount_point)
@@ -121,7 +118,8 @@ impl DiskInfoProvider {
             name,
             mount_point: mount_point.to_string(),
             device_node: mount_point.to_string(),
-            filesystem: Self::get_windows_filesystem(mount_point).unwrap_or_else(|| "NTFS".to_string()),
+            filesystem: Self::get_windows_filesystem(mount_point)
+                .unwrap_or_else(|| "NTFS".to_string()),
             total_bytes,
             used_bytes: total_bytes.saturating_sub(free_bytes_available),
             free_bytes: free_bytes_available,

@@ -32,14 +32,14 @@ impl HomebrewCleaner {
         // Check common Homebrew locations
         #[cfg(target_os = "macos")]
         let paths = [
-            "/opt/homebrew/bin/brew",       // Apple Silicon
-            "/usr/local/bin/brew",          // Intel Mac
+            "/opt/homebrew/bin/brew", // Apple Silicon
+            "/usr/local/bin/brew",    // Intel Mac
         ];
 
         #[cfg(target_os = "linux")]
         let paths = [
-            "/home/linuxbrew/.linuxbrew/bin/brew",  // Linuxbrew system install
-            "/usr/local/bin/brew",                   // Standard location
+            "/home/linuxbrew/.linuxbrew/bin/brew", // Linuxbrew system install
+            "/usr/local/bin/brew",                 // Standard location
         ];
 
         for path in paths {
@@ -115,10 +115,7 @@ impl Cleaner for HomebrewCleaner {
         };
 
         // Run brew cleanup --dry-run to see what would be cleaned
-        let output = match Command::new(&brew)
-            .args(["cleanup", "--dry-run"])
-            .output()
-        {
+        let output = match Command::new(&brew).args(["cleanup", "--dry-run"]).output() {
             Ok(o) => o,
             Err(e) => {
                 return ScanResult {
@@ -168,7 +165,9 @@ impl Cleaner for HomebrewCleaner {
             let scan = self.scan(ctx);
             // Log dry-run for each item
             for item in &scan.items {
-                let _ = self.audit_logger.log_dry_run(self.id(), &item.path, item.size);
+                let _ = self
+                    .audit_logger
+                    .log_dry_run(self.id(), &item.path, item.size);
             }
             return CleanResult {
                 category: self.id().to_string(),
@@ -219,10 +218,12 @@ impl Cleaner for HomebrewCleaner {
                     items_failed: vec![(path, error_msg)],
                     clean_duration: start.elapsed(),
                 }
-            },
+            }
             Err(e) => {
                 let path = std::path::PathBuf::from("brew cleanup");
-                let _ = self.audit_logger.log_error(self.id(), &path, &e.to_string());
+                let _ = self
+                    .audit_logger
+                    .log_error(self.id(), &path, &e.to_string());
                 CleanResult {
                     category: self.id().to_string(),
                     items_cleaned: 0,
@@ -230,7 +231,7 @@ impl Cleaner for HomebrewCleaner {
                     items_failed: vec![(path, e.to_string())],
                     clean_duration: start.elapsed(),
                 }
-            },
+            }
         }
     }
 

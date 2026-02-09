@@ -12,9 +12,9 @@ use super::theme::{Styles, Theme};
 
 /// Render a disk usage gauge with label below the bar.
 pub fn disk_gauge(frame: &mut Frame, area: Rect, _title: &str, used: u64, total: u64) {
+    use ratatui::layout::Alignment;
     use ratatui::layout::{Constraint, Layout};
     use ratatui::widgets::Paragraph;
-    use ratatui::layout::Alignment;
 
     let percentage = if total > 0 {
         ((used as f64 / total as f64) * 100.0) as u16
@@ -59,12 +59,7 @@ pub fn disk_gauge(frame: &mut Frame, area: Rect, _title: &str, used: u64, total:
 }
 
 /// Render a simple bar chart for categories.
-pub fn category_bar(
-    frame: &mut Frame,
-    area: Rect,
-    categories: &[(String, u64)],
-    max_items: usize,
-) {
+pub fn category_bar(frame: &mut Frame, area: Rect, categories: &[(String, u64)], max_items: usize) {
     use ratatui::widgets::Paragraph;
 
     if categories.is_empty() {
@@ -110,11 +105,8 @@ pub fn category_bar(
         )));
     }
 
-    let para = Paragraph::new(lines).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title(" Categories "),
-    );
+    let para =
+        Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title(" Categories "));
     frame.render_widget(para, area);
 }
 

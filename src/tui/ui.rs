@@ -3,7 +3,7 @@
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, Paragraph, Tabs};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Tabs, Wrap};
 use ratatui::Frame;
 use strum::IntoEnumIterator;
 
@@ -31,6 +31,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     // Render overlays
     match app.mode {
         AppMode::Confirming(action) => render_confirm_dialog(app, frame, action),
+        AppMode::ViewingCleanReport => render_clean_report_overlay(app, frame),
         AppMode::ShowingHelp => render_help_overlay(app, frame),
         _ => {}
     }
@@ -76,7 +77,11 @@ fn render_content(app: &mut App, frame: &mut Frame, area: Rect) {
 
 /// Render the footer with key hints.
 fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
-    let help = get_help_text(app.current_tab.id());
+    let help = match app.mode {
+        AppMode::Confirming(_) => vec![("y/Enter", "Confirm"), ("n/Esc", "Cancel"), ("q", "Quit")],
+        AppMode::ViewingCleanReport => vec![("v/Esc", "Close"), ("q", "Quit")],
+        _ => get_help_text(app.current_tab.id()),
+    };
     let spans: Vec<Span> = help
         .iter()
         .flat_map(|(key, desc)| {
@@ -104,11 +109,9 @@ fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
             super::app::StatusLevel::Warning => Styles::warning(),
             super::app::StatusLevel::Error => Styles::error(),
         };
-        Line::from(vec![
-            Span::styled(format!(" {} ", msg), style),
-            Span::raw("│"),
-        ])
-        .patch_style(Styles::footer())
+        let mut spans = vec![Span::styled(format!(" {} ", msg), style), Span::raw("│")];
+        spans.extend(line.spans);
+        Line::from(spans).patch_style(Styles::footer())
     } else {
         line
     };
@@ -150,7 +153,7 @@ fn render_confirm_dialog(_app: &App, frame: &mut Frame, action: ConfirmAction) {
         ),
     };
 
-    let text = format!("{}\n\n[y] Yes  [n/Esc] Cancel", message);
+    let text = format!("{}\n\n[y/Enter] Yes  [n/Esc] Cancel", message);
     let dialog = Paragraph::new(text)
         .block(
             Block::default()
@@ -161,6 +164,129 @@ fn render_confirm_dialog(_app: &App, frame: &mut Frame, action: ConfirmAction) {
         .style(Style::default().fg(Theme::FG));
 
     frame.render_widget(dialog, dialog_area);
+}
+
+fn render_clean_report_overlay(app: &App, frame: &mut Frame) {
+    let area = frame.area();
+    let overlay_width = area.width.saturating_sub(8).max(40);
+    let overlay_height = area.height.saturating_sub(6).max(12);
+    let x = (area.width.saturating_sub(overlay_width)) / 2;
+    let y = (area.height.saturating_sub(overlay_height)) / 2;
+    let overlay_area = Rect::new(x, y, overlay_width, overlay_height);
+
+    frame.render_widget(Clear, overlay_area);
+
+    let mut lines: Vec<Line> = Vec::new();
+
+    if let Some(report) = &app.clean.clean_report {
+        lines.push(Line::from(vec![
+            Span::raw("Completed "),
+            Span::styled(
+                report
+                    .completed_at
+                    .with_timezone(&chrono::Local)
+                    .format("%Y-%m-%d %H:%M:%S")
+                    .to_string(),
+                Style::default().fg(Theme::PRIMARY),
+            ),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("cleaned {}", report.cleaned_count),
+                Styles::success(),
+            ),
+            Span::raw("  "),
+            Span::styled(
+                format!("failed {}", report.failed_count),
+                if report.failed_count > 0 {
+                    Styles::error()
+                } else {
+                    Styles::dim()
+                },
+            ),
+            Span::raw("  "),
+            Span::styled(
+                format!("skipped {}", report.skipped_count),
+                Styles::warning(),
+            ),
+            Span::raw("  "),
+            Span::styled(
+                format!("freed {}", crate::scanner::format_size(report.bytes_freed)),
+                Styles::success(),
+            ),
+        ]));
+        lines.push(Line::from(""));
+
+        if !report.top_failure_reasons.is_empty() {
+            lines.push(Line::from(Span::styled(
+                "Top failure reasons:",
+                Styles::warning(),
+            )));
+            for (reason, count) in &report.top_failure_reasons {
+                lines.push(Line::from(format!("  {}x {}", count, reason)));
+            }
+            lines.push(Line::from(""));
+        }
+
+        if report.failures.is_empty() {
+            lines.push(Line::from(Span::styled(
+                "No failures in the last clean run.",
+                Styles::success(),
+            )));
+        } else {
+            lines.push(Line::from(Span::styled(
+                format!("Failures ({}):", report.failures.len()),
+                Styles::error(),
+            )));
+            for failure in &report.failures {
+                let line = format!(
+                    "[{}] {} -> {}",
+                    failure.category,
+                    failure.path.display(),
+                    failure.reason
+                );
+                lines.push(Line::from(truncate_overlay_line(
+                    &line,
+                    overlay_width as usize,
+                )));
+            }
+        }
+    } else {
+        lines.push(Line::from(Span::styled(
+            "No clean report yet.",
+            Styles::dim(),
+        )));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::raw("Press "),
+        Span::styled("v", Style::default().fg(Theme::PRIMARY)),
+        Span::raw(" or "),
+        Span::styled("Esc", Style::default().fg(Theme::PRIMARY)),
+        Span::raw(" to close"),
+    ]));
+
+    let overlay = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" Last Clean Report ")
+                .title_style(Styles::title()),
+        )
+        .wrap(Wrap { trim: false });
+
+    frame.render_widget(overlay, overlay_area);
+}
+
+fn truncate_overlay_line(line: &str, max_width: usize) -> String {
+    if line.len() <= max_width.saturating_sub(4) {
+        return line.to_string();
+    }
+
+    let keep = max_width.saturating_sub(7);
+    let truncated: String = line.chars().take(keep).collect();
+    format!("{}...", truncated)
 }
 
 /// Render help overlay.
@@ -180,8 +306,9 @@ fn render_help_overlay(_app: &App, frame: &mut Frame) {
     let help_text = r#"
   Global Keys
   ───────────────────────────────
-  Tab/l/h      Switch tabs
+  Tab          Switch tabs
   1-6          Jump to tab
+  h/l          Switch panel
   q            Quit
   ?            Toggle help
   Esc          Cancel/Close
@@ -189,7 +316,6 @@ fn render_help_overlay(_app: &App, frame: &mut Frame) {
   Navigation
   ───────────────────────────────
   j/k/↑/↓      Move up/down
-  Enter        Select/Expand
   Space        Toggle selection
   a            Select all
   n            Select none
@@ -199,6 +325,10 @@ fn render_help_overlay(_app: &App, frame: &mut Frame) {
   s            Start scan
   c            Clean selected
   r            Refresh
+  y/Enter      Confirm
+  n/Esc        Cancel
+  z            Toggle 0B rows
+  v            View clean report
 
   Press any key to close
 "#;

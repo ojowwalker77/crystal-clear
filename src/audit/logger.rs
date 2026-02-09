@@ -245,11 +245,10 @@ impl AuditLogger {
         }
 
         // Write retained entries back
-        let mut file =
-            File::create(&self.jsonl_path).map_err(|e| CleanmacError::Filesystem {
-                path: self.jsonl_path.clone(),
-                source: e,
-            })?;
+        let mut file = File::create(&self.jsonl_path).map_err(|e| CleanmacError::Filesystem {
+            path: self.jsonl_path.clone(),
+            source: e,
+        })?;
 
         for line in retained {
             writeln!(file, "{}", line).map_err(|e| CleanmacError::Filesystem {
@@ -284,10 +283,7 @@ fn migrate_jsonl_to_sqlite(jsonl_path: &Path, db: &Database) -> Result<usize, Cl
     }
 
     // Check if we've already migrated (audit_log table has entries)
-    let existing_count = db
-        .get_recent_audit_entries(1)
-        .map(|e| e.len())
-        .unwrap_or(0);
+    let existing_count = db.get_recent_audit_entries(1).map(|e| e.len()).unwrap_or(0);
     if existing_count > 0 {
         // Already has entries, skip migration
         return Ok(0);
