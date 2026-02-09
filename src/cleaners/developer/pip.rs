@@ -27,10 +27,7 @@ impl PipCleaner {
 
         Self {
             base: BaseCleaner::new(trash_mover, audit_logger),
-            cache_paths: vec![
-                home.join("Library/Caches/pip"),
-                home.join(".cache/pip"),
-            ],
+            cache_paths: vec![home.join("Library/Caches/pip"), home.join(".cache/pip")],
         }
     }
 }
@@ -77,6 +74,7 @@ impl Cleaner for PipCleaner {
     }
 
     fn clean(&self, items: &[CleanableItem], ctx: &CleanerContext) -> CleanResult {
-        self.base.clean_items(self.id(), items, &self.safe_boundary(), ctx)
+        self.base
+            .clean_items(self.id(), items, &self.safe_boundary(), ctx)
     }
 }

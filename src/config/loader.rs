@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::config::schema::Config;
+use crate::config::schema::{CategoryConfig, Config};
 use crate::error::CleanmacError;
 
 /// Default configuration file path.
@@ -23,14 +23,19 @@ pub fn load_config(custom_path: Option<&Path>) -> Result<Config, CleanmacError> 
 
     if !path.exists() {
         // Return default config if file doesn't exist
-        return Ok(Config::default());
+        let mut config = Config::default();
+        expand_config_paths(&mut config);
+        return Ok(config);
     }
 
     let content = fs::read_to_string(&path).map_err(|e| CleanmacError::Config {
         message: format!("Failed to read config file '{}': {}", path.display(), e),
     })?;
 
-    parse_config(&content)
+    let mut config = parse_config(&content)?;
+    expand_config_paths(&mut config);
+    validate_config(&config)?;
+    Ok(config)
 }
 
 /// Parse configuration from TOML string.
@@ -102,6 +107,19 @@ audit_retention_days = 90
 #     "~/Work",
 # ]
 
+[tui]
+# Hide 0-byte rows by default in the TUI clean list
+hide_zero_byte_items = true
+
+# Show clean report overlay after a clean operation
+show_clean_report_on_complete = true
+
+# Parallel scan workers (0 = auto, capped)
+scan_parallelism = 0
+
+# Keep confirm hint copy explicit and consistent
+confirm_keys_hint_style = "explicit"
+
 # Global exclusions (these paths will never be cleaned)
 # exclusions = [
 #     "~/Library/Caches/important-app",
@@ -169,10 +187,7 @@ pub fn validate_config(config: &Config) -> Result<(), CleanmacError> {
         let expanded = expand_tilde(path);
         if !expanded.exists() {
             // Warning only, not an error
-            tracing::warn!(
-                "Protected path does not exist: {}",
-                expanded.display()
-            );
+            tracing::warn!("Protected path does not exist: {}", expanded.display());
         }
     }
 
@@ -185,6 +200,36 @@ pub fn validate_config(config: &Config) -> Result<(), CleanmacError> {
     }
 
     Ok(())
+}
+
+fn expand_category_paths(category: &mut CategoryConfig) {
+    for path in &mut category.paths {
+        *path = expand_tilde(path);
+    }
+    for path in &mut category.exclude {
+        *path = expand_tilde(path);
+    }
+}
+
+fn expand_config_paths(config: &mut Config) {
+    for path in &mut config.safety.protected_paths {
+        *path = expand_tilde(path);
+    }
+    for path in &mut config.exclusions {
+        *path = expand_tilde(path);
+    }
+
+    expand_category_paths(&mut config.categories.system_cache);
+    expand_category_paths(&mut config.categories.system_logs);
+    expand_category_paths(&mut config.categories.trash.base);
+    expand_category_paths(&mut config.categories.xcode.base);
+    expand_category_paths(&mut config.categories.homebrew.base);
+    expand_category_paths(&mut config.categories.npm);
+    expand_category_paths(&mut config.categories.yarn);
+    expand_category_paths(&mut config.categories.cargo.base);
+    expand_category_paths(&mut config.categories.pip);
+    expand_category_paths(&mut config.categories.docker.base);
+    expand_category_paths(&mut config.categories.apps.base);
 }
 
 /// Expand ~ to the home directory.
@@ -207,6 +252,9 @@ mod tests {
         let config = parse_config(&content).unwrap();
         assert!(config.general.dry_run_default);
         assert!(config.safety.always_confirm);
+        assert!(config.tui.hide_zero_byte_items);
+        assert!(config.tui.show_clean_report_on_complete);
+        assert_eq!(config.tui.scan_parallelism, 0);
     }
 
     #[test]
@@ -214,6 +262,7 @@ mod tests {
         let config = parse_config("").unwrap();
         assert!(config.general.dry_run_default);
         assert_eq!(config.safety.warn_threshold, 10 * 1024 * 1024 * 1024);
+        assert!(config.tui.hide_zero_byte_items);
     }
 
     #[test]

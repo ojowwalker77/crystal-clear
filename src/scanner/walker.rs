@@ -50,26 +50,20 @@ pub struct ScannedItem {
 }
 
 impl ScannedItem {
-    fn from_entry(entry: &DirEntry) -> Option<Self> {
-        let path = entry.path().to_path_buf();
-        let metadata = entry.metadata().ok()?;
-
-        Some(Self {
-            path: path.clone(),
-            size: if metadata.is_file() {
-                metadata.len()
-            } else if metadata.is_dir() {
-                calculate_size(&path)
-            } else {
-                0
-            },
+    fn from_entry(
+        entry: &DirEntry,
+        metadata: &std::fs::Metadata,
+        size: u64,
+        age_days: Option<u32>,
+    ) -> Self {
+        Self {
+            path: entry.path().to_path_buf(),
+            size,
             is_dir: metadata.is_dir(),
             is_symlink: entry.path_is_symlink(),
-            age_days: metadata.modified().ok().and_then(|t| {
-                t.elapsed().ok().map(|d| (d.as_secs() / 86400) as u32)
-            }),
+            age_days,
             modified: metadata.modified().ok(),
-        })
+        }
     }
 }
 
@@ -85,54 +79,64 @@ pub fn scan_directory(
     let walker = WalkDir::new(root)
         .follow_links(options.follow_links)
         .max_depth(options.max_depth.unwrap_or(usize::MAX))
-        .min_depth(if options.top_level_only { 1 } else { 0 });
+        .min_depth(1)
+        .into_iter()
+        .filter_entry(|entry| {
+            let path = entry.path();
+            if path == root {
+                return true;
+            }
 
-    for entry in walker.into_iter().filter_map(|e| e.ok()) {
+            if is_protected(path) {
+                return false;
+            }
+
+            if options.top_level_only && entry.depth() > 1 {
+                return false;
+            }
+
+            matches!(validator.validate(path, boundary), ValidationResult::Safe)
+        });
+
+    for entry in walker.filter_map(|e| e.ok()) {
         let path = entry.path();
 
-        // Skip the root itself
-        if path == root {
-            continue;
-        }
-
-        // Skip protected paths
-        if is_protected(path) {
-            continue;
-        }
-
-        // Validate against boundary
-        match validator.validate(path, boundary) {
-            ValidationResult::Safe => {}
-            _ => continue,
-        }
-
-        // Skip if only wanting top-level and this is deeper
-        if options.top_level_only && path.parent() != Some(root) {
-            continue;
-        }
-
         // Skip if only wanting directories
-        if options.directories_only && !path.is_dir() {
+        if options.directories_only && !entry.file_type().is_dir() {
             continue;
         }
 
-        // Create scanned item
-        if let Some(item) = ScannedItem::from_entry(&entry) {
-            // Apply filters
-            if let Some(min_age) = options.min_age_days {
-                if item.age_days.map(|a| a < min_age).unwrap_or(true) {
-                    continue;
-                }
-            }
+        let metadata = match entry.metadata() {
+            Ok(metadata) => metadata,
+            Err(_) => continue,
+        };
 
-            if let Some(min_size) = options.min_size {
-                if item.size < min_size {
-                    continue;
-                }
-            }
+        let age_days = metadata
+            .modified()
+            .ok()
+            .and_then(|t| t.elapsed().ok().map(|d| (d.as_secs() / 86400) as u32));
 
-            items.push(item);
+        if let Some(min_age) = options.min_age_days {
+            if age_days.map(|a| a < min_age).unwrap_or(true) {
+                continue;
+            }
         }
+
+        let size = if metadata.is_file() {
+            metadata.len()
+        } else if metadata.is_dir() {
+            calculate_size(path)
+        } else {
+            0
+        };
+
+        if let Some(min_size) = options.min_size {
+            if size < min_size {
+                continue;
+            }
+        }
+
+        items.push(ScannedItem::from_entry(&entry, &metadata, size, age_days));
     }
 
     items

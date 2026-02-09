@@ -5,8 +5,8 @@
 //! - Disk information utilities
 //! - Application detection
 
-pub mod paths;
 pub mod disk;
+pub mod paths;
 
-pub use paths::PlatformPaths;
 pub use disk::DiskInfoProvider;
+pub use paths::PlatformPaths;

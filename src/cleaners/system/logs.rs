@@ -69,18 +69,15 @@ impl Cleaner for SystemLogsCleaner {
             ..Default::default()
         };
 
-        let mut result = self.base.scan_dirs(
-            self.id(),
-            &self.paths,
-            &self.safe_boundary(),
-            &options,
-            ctx,
-        );
+        let mut result =
+            self.base
+                .scan_dirs(self.id(), &self.paths, &self.safe_boundary(), &options, ctx);
 
         result.items.retain(|item| {
-            !self.exclude.iter().any(|excl| {
-                item.path.starts_with(excl) || item.path == *excl
-            })
+            !self
+                .exclude
+                .iter()
+                .any(|excl| item.path.starts_with(excl) || item.path == *excl)
         });
 
         result.total_size = result.items.iter().map(|i| i.size).sum();
@@ -89,6 +86,7 @@ impl Cleaner for SystemLogsCleaner {
     }
 
     fn clean(&self, items: &[CleanableItem], ctx: &CleanerContext) -> CleanResult {
-        self.base.clean_items(self.id(), items, &self.safe_boundary(), ctx)
+        self.base
+            .clean_items(self.id(), items, &self.safe_boundary(), ctx)
     }
 }

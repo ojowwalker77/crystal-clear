@@ -78,6 +78,7 @@ impl Cleaner for NpmCleaner {
     }
 
     fn clean(&self, items: &[CleanableItem], ctx: &CleanerContext) -> CleanResult {
-        self.base.clean_items(self.id(), items, &self.safe_boundary(), ctx)
+        self.base
+            .clean_items(self.id(), items, &self.safe_boundary(), ctx)
     }
 }

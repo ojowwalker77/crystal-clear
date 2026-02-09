@@ -27,11 +27,7 @@ pub struct XcodeCleaner {
 }
 
 impl XcodeCleaner {
-    pub fn new(
-        trash_mover: TrashMover,
-        audit_logger: AuditLogger,
-        config: &XcodeConfig,
-    ) -> Self {
+    pub fn new(trash_mover: TrashMover, audit_logger: AuditLogger, config: &XcodeConfig) -> Self {
         let home = dirs::home_dir().expect("Home directory required");
         let developer = home.join("Library/Developer/Xcode");
 
@@ -54,10 +50,7 @@ impl XcodeCleaner {
             return Vec::new();
         }
 
-        let boundary = SafeBoundary::new(
-            vec![self.derived_data_path.clone()],
-            "Xcode DerivedData",
-        );
+        let boundary = SafeBoundary::new(vec![self.derived_data_path.clone()], "Xcode DerivedData");
 
         let options = ScanOptions {
             top_level_only: true,
@@ -81,10 +74,7 @@ impl XcodeCleaner {
             return Vec::new();
         }
 
-        let boundary = SafeBoundary::new(
-            vec![self.archives_path.clone()],
-            "Xcode Archives",
-        );
+        let boundary = SafeBoundary::new(vec![self.archives_path.clone()], "Xcode Archives");
 
         let options = ScanOptions {
             directories_only: true,
@@ -192,8 +182,7 @@ impl Cleaner for XcodeCleaner {
     }
 
     fn is_available(&self) -> bool {
-        std::path::Path::new("/Applications/Xcode.app").exists()
-            || self.derived_data_path.exists()
+        std::path::Path::new("/Applications/Xcode.app").exists() || self.derived_data_path.exists()
     }
 
     fn scan(&self, ctx: &CleanerContext) -> ScanResult {
@@ -217,6 +206,7 @@ impl Cleaner for XcodeCleaner {
     }
 
     fn clean(&self, items: &[CleanableItem], ctx: &CleanerContext) -> CleanResult {
-        self.base.clean_items(self.id(), items, &self.safe_boundary(), ctx)
+        self.base
+            .clean_items(self.id(), items, &self.safe_boundary(), ctx)
     }
 }

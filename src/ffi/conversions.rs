@@ -1,6 +1,8 @@
 //! Type conversions between internal Rust types and FFI-safe types.
 
-use crate::cleaners::{CleanResult, CleanableItem, CleanerCategory, ItemType, RiskLevel, ScanResult};
+use crate::cleaners::{
+    CleanResult, CleanableItem, CleanerCategory, ItemType, RiskLevel, ScanResult,
+};
 use crate::disk::DiskInfo;
 use crate::error::CleanmacError;
 use crate::scanner::apps::InstalledApp;
@@ -61,7 +63,11 @@ impl From<ScanResult> for FFIScanResult {
         Self {
             category: result.category.clone(),
             category_name: result.category, // Use same for now, can add display name mapping
-            items: result.items.into_iter().map(FFICleanableItem::from).collect(),
+            items: result
+                .items
+                .into_iter()
+                .map(FFICleanableItem::from)
+                .collect(),
             total_size: result.total_size,
             scan_duration_ms: result.scan_duration.as_millis() as u64,
             errors: result.errors,

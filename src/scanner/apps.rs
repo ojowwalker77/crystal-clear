@@ -1,7 +1,7 @@
 //! Application scanner - finds installed apps and their sizes.
 
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 
 /// Information about an installed application.
 #[derive(Debug, Clone)]

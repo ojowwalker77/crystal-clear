@@ -42,15 +42,15 @@ pub fn parse_size(s: &str) -> Option<u64> {
     let s = s.trim().to_uppercase();
 
     let (num_str, multiplier) = if s.ends_with("TB") {
-        (&s[..s.len()-2], 1024u64 * 1024 * 1024 * 1024)
+        (&s[..s.len() - 2], 1024u64 * 1024 * 1024 * 1024)
     } else if s.ends_with("GB") {
-        (&s[..s.len()-2], 1024u64 * 1024 * 1024)
+        (&s[..s.len() - 2], 1024u64 * 1024 * 1024)
     } else if s.ends_with("MB") {
-        (&s[..s.len()-2], 1024u64 * 1024)
+        (&s[..s.len() - 2], 1024u64 * 1024)
     } else if s.ends_with("KB") {
-        (&s[..s.len()-2], 1024u64)
+        (&s[..s.len() - 2], 1024u64)
     } else if s.ends_with("B") {
-        (&s[..s.len()-1], 1u64)
+        (&s[..s.len() - 1], 1u64)
     } else {
         // Assume bytes if no suffix
         (s.as_str(), 1u64)
@@ -109,7 +109,10 @@ mod tests {
         assert_eq!(parse_size("1KB"), Some(1024));
         assert_eq!(parse_size("1MB"), Some(1024 * 1024));
         assert_eq!(parse_size("1GB"), Some(1024 * 1024 * 1024));
-        assert_eq!(parse_size("1.5GB"), Some((1.5 * 1024.0 * 1024.0 * 1024.0) as u64));
+        assert_eq!(
+            parse_size("1.5GB"),
+            Some((1.5 * 1024.0 * 1024.0 * 1024.0) as u64)
+        );
     }
 
     #[test]

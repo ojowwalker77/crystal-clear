@@ -57,8 +57,7 @@ fn get_base_device(device: &str) -> String {
 
 /// Parse JSON output from smartctl.
 fn parse_json_output(stdout: &[u8]) -> Result<SmartData, String> {
-    let json: serde_json::Value =
-        serde_json::from_slice(stdout).map_err(|e| e.to_string())?;
+    let json: serde_json::Value = serde_json::from_slice(stdout).map_err(|e| e.to_string())?;
 
     let mut data = SmartData::default();
 
@@ -99,7 +98,10 @@ fn parse_json_output(stdout: &[u8]) -> Result<SmartData, String> {
     }
 
     // ATA attributes
-    if let Some(attrs) = json.get("ata_smart_attributes").and_then(|a| a.get("table")) {
+    if let Some(attrs) = json
+        .get("ata_smart_attributes")
+        .and_then(|a| a.get("table"))
+    {
         if let Some(arr) = attrs.as_array() {
             for attr in arr {
                 let id = attr.get("id").and_then(|v| v.as_u64()).unwrap_or(0);

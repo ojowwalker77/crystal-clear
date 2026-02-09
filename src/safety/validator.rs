@@ -99,10 +99,7 @@ impl PathValidator {
             }
             Err(_) => {
                 return ValidationResult::BoundaryViolation {
-                    reason: format!(
-                        "Cannot verify path '{}' is within boundary",
-                        path.display()
-                    ),
+                    reason: format!("Cannot verify path '{}' is within boundary", path.display()),
                 };
             }
         }
@@ -176,17 +173,14 @@ impl PathValidator {
             }
 
             // Read the symlink target
-            let target = std::fs::read_link(&current)
-                .map_err(|e| format!("Cannot read symlink: {}", e))?;
+            let target =
+                std::fs::read_link(&current).map_err(|e| format!("Cannot read symlink: {}", e))?;
 
             // If relative, resolve relative to the symlink's directory
             current = if target.is_absolute() {
                 target
             } else {
-                current
-                    .parent()
-                    .unwrap_or(Path::new("/"))
-                    .join(target)
+                current.parent().unwrap_or(Path::new("/")).join(target)
             };
         }
 
@@ -204,11 +198,9 @@ impl ValidationResult {
     pub fn into_result(self, path: &Path) -> Result<(), CleanmacError> {
         match self {
             ValidationResult::Safe => Ok(()),
-            ValidationResult::HardProtected { reason: _ } => {
-                Err(CleanmacError::ProtectedPath {
-                    path: path.to_path_buf(),
-                })
-            }
+            ValidationResult::HardProtected { reason: _ } => Err(CleanmacError::ProtectedPath {
+                path: path.to_path_buf(),
+            }),
             ValidationResult::UserExcluded => Ok(()), // Excluded paths are silently skipped
             ValidationResult::BoundaryViolation { reason: _ } => {
                 Err(CleanmacError::BoundaryEscape {
@@ -260,7 +252,7 @@ mod tests {
         #[cfg(target_os = "macos")]
         let paths = &["/", "/System", "/Applications", "/Library", "/bin", "/usr"];
         #[cfg(target_os = "linux")]
-        let paths = &["/", "/usr", "/etc"];  // /bin may be symlink on some distros
+        let paths = &["/", "/usr", "/etc"]; // /bin may be symlink on some distros
         #[cfg(target_os = "windows")]
         let paths = &["C:\\Windows", "C:\\Program Files"];
 

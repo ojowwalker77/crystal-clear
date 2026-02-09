@@ -141,7 +141,10 @@ fn migrate_v1(conn: &mut rusqlite::Connection) -> Result<(), rusqlite::Error> {
         "#,
     )?;
 
-    tx.execute("INSERT INTO schema_version (version) VALUES (?)", [SCHEMA_VERSION])?;
+    tx.execute(
+        "INSERT INTO schema_version (version) VALUES (?)",
+        [SCHEMA_VERSION],
+    )?;
 
     tx.commit()?;
     Ok(())

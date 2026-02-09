@@ -27,10 +27,7 @@ impl YarnCleaner {
 
         Self {
             base: BaseCleaner::new(trash_mover, audit_logger),
-            cache_paths: vec![
-                home.join(".yarn/cache"),
-                home.join("Library/Caches/Yarn"),
-            ],
+            cache_paths: vec![home.join(".yarn/cache"), home.join("Library/Caches/Yarn")],
         }
     }
 }
@@ -77,6 +74,7 @@ impl Cleaner for YarnCleaner {
     }
 
     fn clean(&self, items: &[CleanableItem], ctx: &CleanerContext) -> CleanResult {
-        self.base.clean_items(self.id(), items, &self.safe_boundary(), ctx)
+        self.base
+            .clean_items(self.id(), items, &self.safe_boundary(), ctx)
     }
 }

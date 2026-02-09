@@ -133,16 +133,15 @@ impl Cleaner for TrashCleaner {
             match boundary.contains(&canonical) {
                 Ok(true) => {}
                 _ => {
-                    failed.push((
-                        item.path.clone(),
-                        "Path fails boundary check".to_string(),
-                    ));
+                    failed.push((item.path.clone(), "Path fails boundary check".to_string()));
                     continue;
                 }
             }
 
             if ctx.dry_run {
-                let _ = self.audit_logger.log_dry_run(self.id(), &item.path, item.size);
+                let _ = self
+                    .audit_logger
+                    .log_dry_run(self.id(), &item.path, item.size);
                 cleaned += 1;
                 bytes_freed += item.size;
                 continue;
@@ -157,13 +156,17 @@ impl Cleaner for TrashCleaner {
 
             match result {
                 Ok(()) => {
-                    let _ = self.audit_logger.log_cleaned(self.id(), &item.path, item.size);
+                    let _ = self
+                        .audit_logger
+                        .log_cleaned(self.id(), &item.path, item.size);
                     cleaned += 1;
                     bytes_freed += item.size;
                 }
                 Err(e) => {
                     let error_msg = e.to_string();
-                    let _ = self.audit_logger.log_error(self.id(), &item.path, &error_msg);
+                    let _ = self
+                        .audit_logger
+                        .log_error(self.id(), &item.path, &error_msg);
                     failed.push((item.path.clone(), error_msg));
                 }
             }

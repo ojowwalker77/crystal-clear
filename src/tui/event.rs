@@ -90,6 +90,8 @@ pub enum KeyAction {
     Save,
     Reset,
     Discover,
+    ToggleZeroByteRows,
+    ViewReport,
 
     // App
     Quit,
@@ -144,7 +146,8 @@ pub fn parse_key(key: KeyEvent) -> KeyAction {
         // Selection
         KeyCode::Char(' ') => KeyAction::Select,
         KeyCode::Char('a') => KeyAction::SelectAll,
-        KeyCode::Char('n') => KeyAction::SelectNone,
+        KeyCode::Char('n') | KeyCode::Char('N') => KeyAction::SelectNone,
+        KeyCode::Char('y') | KeyCode::Char('Y') => KeyAction::Confirm,
         KeyCode::Enter => KeyAction::Confirm,
 
         // Actions
@@ -152,6 +155,8 @@ pub fn parse_key(key: KeyEvent) -> KeyAction {
         KeyCode::Char('c') => KeyAction::StartClean,
         KeyCode::Char('r') => KeyAction::Refresh,
         KeyCode::Char('d') | KeyCode::Char('D') => KeyAction::Discover,
+        KeyCode::Char('z') | KeyCode::Char('Z') => KeyAction::ToggleZeroByteRows,
+        KeyCode::Char('v') | KeyCode::Char('V') => KeyAction::ViewReport,
         KeyCode::Delete => KeyAction::Delete,
         KeyCode::Char('/') => KeyAction::Search,
         KeyCode::Char('f') => KeyAction::Filter,
@@ -170,10 +175,7 @@ pub fn parse_key(key: KeyEvent) -> KeyAction {
 
 /// Get help text for current context.
 pub fn get_help_text(tab: &str) -> Vec<(&'static str, &'static str)> {
-    let mut help = vec![
-        ("Tab", "Switch"),
-        ("q", "Quit"),
-    ];
+    let mut help = vec![("Tab", "Switch"), ("q", "Quit")];
 
     match tab {
         "home" => {
@@ -183,17 +185,43 @@ pub fn get_help_text(tab: &str) -> Vec<(&'static str, &'static str)> {
                 ("Space", "Select"),
                 ("a/n", "All/None"),
                 ("c", "Clean"),
+                ("y/n", "Confirm/Cancel"),
+                ("z", "0 B rows"),
+                ("v", "Report"),
             ]);
         }
         "settings" => {
-            help.extend([
-                ("j/k", "Navigate"),
-                ("Space", "Toggle"),
-                ("S", "Save"),
-            ]);
+            help.extend([("j/k", "Navigate"), ("Space", "Toggle"), ("S", "Save")]);
         }
         _ => {}
     }
 
     help
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn confirm_key_mappings_are_explicit() {
+        assert_eq!(parse_key(key(KeyCode::Char('y'))), KeyAction::Confirm);
+        assert_eq!(parse_key(key(KeyCode::Char('Y'))), KeyAction::Confirm);
+        assert_eq!(parse_key(key(KeyCode::Enter)), KeyAction::Confirm);
+        assert_eq!(parse_key(key(KeyCode::Char('n'))), KeyAction::SelectNone);
+        assert_eq!(parse_key(key(KeyCode::Esc)), KeyAction::Cancel);
+    }
+
+    #[test]
+    fn home_shortcuts_include_new_tui_actions() {
+        assert_eq!(
+            parse_key(key(KeyCode::Char('z'))),
+            KeyAction::ToggleZeroByteRows
+        );
+        assert_eq!(parse_key(key(KeyCode::Char('v'))), KeyAction::ViewReport);
+    }
 }
