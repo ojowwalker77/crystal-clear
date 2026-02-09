@@ -173,10 +173,7 @@ impl Cleaner for AppsLeftoversCleaner {
                 continue;
             }
 
-            let boundary = SafeBoundary::new(
-                vec![search_path.clone()],
-                "App search directory",
-            );
+            let boundary = SafeBoundary::new(vec![search_path.clone()], "App search directory");
 
             let options = ScanOptions {
                 top_level_only: true,
@@ -235,7 +232,9 @@ impl Cleaner for AppsLeftoversCleaner {
             }
 
             if ctx.dry_run {
-                let _ = self.audit_logger.log_dry_run(self.id(), &item.path, item.size);
+                let _ = self
+                    .audit_logger
+                    .log_dry_run(self.id(), &item.path, item.size);
                 cleaned += 1;
                 bytes_freed += item.size;
                 continue;
@@ -252,13 +251,17 @@ impl Cleaner for AppsLeftoversCleaner {
 
             match std::fs::rename(&item.path, &trash_dest) {
                 Ok(()) => {
-                    let _ = self.audit_logger.log_cleaned(self.id(), &item.path, item.size);
+                    let _ = self
+                        .audit_logger
+                        .log_cleaned(self.id(), &item.path, item.size);
                     cleaned += 1;
                     bytes_freed += item.size;
                 }
                 Err(e) => {
                     let error_msg = e.to_string();
-                    let _ = self.audit_logger.log_error(self.id(), &item.path, &error_msg);
+                    let _ = self
+                        .audit_logger
+                        .log_error(self.id(), &item.path, &error_msg);
                     failed.push((item.path.clone(), error_msg));
                 }
             }

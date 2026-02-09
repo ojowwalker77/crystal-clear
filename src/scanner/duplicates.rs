@@ -170,30 +170,35 @@ fn collect_files_by_size(
     let walker = WalkDir::new(dir)
         .follow_links(false)
         .max_depth(8)
-        .into_iter();
+        .into_iter()
+        .filter_entry(|entry| {
+            let path = entry.path();
+
+            if !options.include_hidden {
+                if let Some(name) = path.file_name() {
+                    if name.to_string_lossy().starts_with('.') {
+                        return false;
+                    }
+                }
+            }
+
+            if is_protected(path) {
+                return false;
+            }
+
+            if entry.file_type().is_dir() {
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    if skip_dirs.iter().any(|d| d == &name) {
+                        return false;
+                    }
+                }
+            }
+
+            true
+        });
 
     for entry in walker.filter_map(|e| e.ok()) {
         let path = entry.path();
-
-        // Skip hidden if not requested
-        if !options.include_hidden {
-            if let Some(name) = path.file_name() {
-                if name.to_string_lossy().starts_with('.') {
-                    continue;
-                }
-            }
-        }
-
-        // Skip system directories
-        let path_str = path.to_string_lossy();
-        if skip_dirs.iter().any(|d| path_str.contains(&format!("/{}/", d))) {
-            continue;
-        }
-
-        // Skip protected
-        if is_protected(path) {
-            continue;
-        }
 
         // Only files
         if !entry.file_type().is_file() {
@@ -213,7 +218,10 @@ fn collect_files_by_size(
             continue;
         }
 
-        size_groups.entry(size).or_default().push(path.to_path_buf());
+        size_groups
+            .entry(size)
+            .or_default()
+            .push(path.to_path_buf());
     }
 }
 

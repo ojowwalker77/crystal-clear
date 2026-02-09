@@ -106,10 +106,7 @@ impl BaseCleaner {
         for item in items {
             // Skip items that require force if not forced
             if item.requires_force && !ctx.force {
-                failed.push((
-                    item.path.clone(),
-                    "Requires --force flag".to_string(),
-                ));
+                failed.push((item.path.clone(), "Requires --force flag".to_string()));
                 continue;
             }
 
@@ -118,7 +115,9 @@ impl BaseCleaner {
                 let validation = self.trash_mover.validator().validate(&item.path, boundary);
                 match validation {
                     crate::safety::ValidationResult::Safe => {
-                        let _ = self.audit_logger.log_dry_run(cleaner_id, &item.path, item.size);
+                        let _ = self
+                            .audit_logger
+                            .log_dry_run(cleaner_id, &item.path, item.size);
                         cleaned += 1;
                         bytes_freed += item.size;
                     }
@@ -126,25 +125,29 @@ impl BaseCleaner {
                         // Silently skip excluded items
                     }
                     _ => {
-                        failed.push((
-                            item.path.clone(),
-                            format!("Would fail: {:?}", validation),
-                        ));
+                        failed.push((item.path.clone(), format!("Would fail: {:?}", validation)));
                     }
                 }
                 continue;
             }
 
             // Actually move to trash
-            match self.trash_mover.move_to_trash_validated(&item.path, boundary) {
+            match self
+                .trash_mover
+                .move_to_trash_validated(&item.path, boundary)
+            {
                 Ok(_) => {
-                    let _ = self.audit_logger.log_cleaned(cleaner_id, &item.path, item.size);
+                    let _ = self
+                        .audit_logger
+                        .log_cleaned(cleaner_id, &item.path, item.size);
                     cleaned += 1;
                     bytes_freed += item.size;
                 }
                 Err(e) => {
                     let error_msg = e.to_string();
-                    let _ = self.audit_logger.log_error(cleaner_id, &item.path, &error_msg);
+                    let _ = self
+                        .audit_logger
+                        .log_error(cleaner_id, &item.path, &error_msg);
                     failed.push((item.path.clone(), error_msg));
                 }
             }

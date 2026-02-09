@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::ffi::{FFICleanableItem, FFIItemType, FFIRiskLevel};
+use crate::safety::is_protected;
 
 /// Category of a download item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -129,11 +130,15 @@ pub fn scan_downloads(options: &DownloadsScanOptions) -> DownloadsScanResult {
     let walker = WalkDir::new(&downloads)
         .follow_links(false)
         .min_depth(1)
-        .max_depth(3)
+        .max_depth(1)
         .into_iter();
 
     for entry in walker.filter_map(|e| e.ok()) {
         let path = entry.path();
+
+        if is_protected(path) {
+            continue;
+        }
 
         // Skip hidden files if not requested
         if !options.include_hidden {
@@ -158,9 +163,10 @@ pub fn scan_downloads(options: &DownloadsScanOptions) -> DownloadsScanResult {
             continue;
         };
 
-        let age_days = metadata.modified().ok().and_then(|t| {
-            t.elapsed().ok().map(|d| (d.as_secs() / 86400) as u32)
-        });
+        let age_days = metadata
+            .modified()
+            .ok()
+            .and_then(|t| t.elapsed().ok().map(|d| (d.as_secs() / 86400) as u32));
 
         // Determine category
         let category = categorize_download(path, size, age_days, options.old_threshold_days);
@@ -233,8 +239,10 @@ fn categorize_download(
     }
 
     // Check for documents
-    if ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "rtf", "odt", "ods", "odp"]
-        .contains(&extension.as_str())
+    if [
+        "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "rtf", "odt", "ods", "odp",
+    ]
+    .contains(&extension.as_str())
     {
         return DownloadCategory::Documents;
     }

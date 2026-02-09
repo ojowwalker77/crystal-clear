@@ -19,20 +19,13 @@ pub struct CargoCleaner {
 }
 
 impl CargoCleaner {
-    pub fn new(
-        trash_mover: TrashMover,
-        audit_logger: AuditLogger,
-        config: &CargoConfig,
-    ) -> Self {
+    pub fn new(trash_mover: TrashMover, audit_logger: AuditLogger, config: &CargoConfig) -> Self {
         let home = dirs::home_dir().expect("Home directory required");
         let cargo = home.join(".cargo");
 
         Self {
             base: BaseCleaner::new(trash_mover, audit_logger),
-            cache_paths: vec![
-                cargo.join("registry/cache"),
-                cargo.join("registry/src"),
-            ],
+            cache_paths: vec![cargo.join("registry/cache"), cargo.join("registry/src")],
             keep_recent_days: config.keep_recent_days,
         }
     }
@@ -85,6 +78,7 @@ impl Cleaner for CargoCleaner {
     }
 
     fn clean(&self, items: &[CleanableItem], ctx: &CleanerContext) -> CleanResult {
-        self.base.clean_items(self.id(), items, &self.safe_boundary(), ctx)
+        self.base
+            .clean_items(self.id(), items, &self.safe_boundary(), ctx)
     }
 }

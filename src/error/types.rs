@@ -13,7 +13,6 @@ pub enum CleanmacError {
     // ============================================================
     // FATAL ERRORS - These immediately terminate the program
     // ============================================================
-
     /// Attempted to access a protected system path.
     /// This is a critical safety violation.
     #[error("SAFETY VIOLATION: '{path}' is a protected system path and cannot be modified")]
@@ -39,7 +38,6 @@ pub enum CleanmacError {
     // ============================================================
     // RECOVERABLE ERRORS - Logged and processing continues
     // ============================================================
-
     /// Permission denied when accessing a file or directory.
     #[error("Permission denied: '{path}'")]
     PermissionDenied { path: PathBuf },
@@ -63,7 +61,6 @@ pub enum CleanmacError {
     // ============================================================
     // USER INTERACTION ERRORS
     // ============================================================
-
     /// Operation exceeds size limit and requires --force flag.
     #[error("Size limit exceeded: {size} bytes exceeds {limit} bytes. Use --force to proceed.")]
     SizeLimitExceeded { size: u64, limit: u64 },
@@ -75,7 +72,6 @@ pub enum CleanmacError {
     // ============================================================
     // CLEANER ERRORS
     // ============================================================
-
     /// A cleaner failed to complete its operation.
     #[error("Cleaner '{cleaner}' failed: {message}")]
     CleanerFailed { cleaner: String, message: String },

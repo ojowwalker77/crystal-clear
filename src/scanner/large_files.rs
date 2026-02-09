@@ -36,16 +36,8 @@ pub fn scan_large_files(options: &LargeFileScanOptions) -> Vec<FFICleanableItem>
         None => return vec![],
     };
 
-    // Directories to scan
-    let scan_dirs = [
-        home.clone(),
-        home.join("Documents"),
-        home.join("Downloads"),
-        home.join("Desktop"),
-        home.join("Movies"),
-        home.join("Music"),
-        home.join("Pictures"),
-    ];
+    // Scan home once to avoid duplicate results from nested roots.
+    let scan_dirs = [home];
 
     let mut large_files: Vec<LargeFileEntry> = Vec::new();
 
@@ -54,11 +46,7 @@ pub fn scan_large_files(options: &LargeFileScanOptions) -> Vec<FFICleanableItem>
             continue;
         }
 
-        scan_directory_for_large_files(
-            dir,
-            options,
-            &mut large_files,
-        );
+        scan_directory_for_large_files(dir, options, &mut large_files);
     }
 
     // Sort by size descending
@@ -117,37 +105,31 @@ fn scan_directory_for_large_files(
     let walker = WalkDir::new(dir)
         .follow_links(false)
         .max_depth(10) // Don't go too deep
-        .into_iter();
+        .into_iter()
+        .filter_entry(|entry| {
+            let path = entry.path();
+
+            if !options.include_hidden {
+                if let Some(name) = path.file_name() {
+                    if name.to_string_lossy().starts_with('.') {
+                        return false;
+                    }
+                }
+            }
+
+            if is_protected(path) {
+                return false;
+            }
+
+            let path_str = path.to_string_lossy();
+            !skip_prefixes.iter().any(|prefix| {
+                path_str.contains(&format!("/{}/", prefix))
+                    || path_str.ends_with(&format!("/{}", prefix))
+            })
+        });
 
     for entry in walker.filter_map(|e| e.ok()) {
         let path = entry.path();
-
-        // Skip hidden files if not requested
-        if !options.include_hidden {
-            if let Some(name) = path.file_name() {
-                if name.to_string_lossy().starts_with('.') {
-                    if entry.file_type().is_dir() {
-                        // Skip walking into hidden directories
-                        continue;
-                    }
-                    continue;
-                }
-            }
-        }
-
-        // Skip system directories
-        let path_str = path.to_string_lossy();
-        let should_skip = skip_prefixes.iter().any(|prefix| {
-            path_str.contains(&format!("/{}/", prefix)) || path_str.ends_with(&format!("/{}", prefix))
-        });
-        if should_skip {
-            continue;
-        }
-
-        // Skip protected paths
-        if is_protected(path) {
-            continue;
-        }
 
         // Only process files (not directories for size, we want individual files)
         if !entry.file_type().is_file() {
@@ -167,9 +149,10 @@ fn scan_directory_for_large_files(
             continue;
         }
 
-        let age_days = metadata.modified().ok().and_then(|t| {
-            t.elapsed().ok().map(|d| (d.as_secs() / 86400) as u32)
-        });
+        let age_days = metadata
+            .modified()
+            .ok()
+            .and_then(|t| t.elapsed().ok().map(|d| (d.as_secs() / 86400) as u32));
 
         results.push(LargeFileEntry {
             path: path.to_path_buf(),
@@ -189,15 +172,21 @@ fn determine_risk(path: &Path) -> FFIRiskLevel {
         return FFIRiskLevel::High;
     }
     if let Some(ext) = &extension {
-        if ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "pdf", "key", "pages", "numbers"]
-            .contains(&ext.as_str())
+        if [
+            "doc", "docx", "xls", "xlsx", "ppt", "pptx", "pdf", "key", "pages", "numbers",
+        ]
+        .contains(&ext.as_str())
         {
             return FFIRiskLevel::High;
         }
         if ["db", "sqlite", "sqlite3", "sql"].contains(&ext.as_str()) {
             return FFIRiskLevel::High;
         }
-        if ["rs", "py", "js", "ts", "swift", "java", "cpp", "c", "h", "go"].contains(&ext.as_str()) {
+        if [
+            "rs", "py", "js", "ts", "swift", "java", "cpp", "c", "h", "go",
+        ]
+        .contains(&ext.as_str())
+        {
             return FFIRiskLevel::High;
         }
     }
@@ -253,7 +242,7 @@ mod tests {
         // Create a small file
         fs::write(temp.path().join("small.txt"), "hello").unwrap();
 
-        let options = LargeFileScanOptions {
+        let _options = LargeFileScanOptions {
             min_size_bytes: 1024 * 1024, // 1MB
             max_results: 10,
             include_hidden: false,

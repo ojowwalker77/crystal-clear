@@ -26,7 +26,10 @@ pub fn render(frame: &mut Frame, area: Rect, hints: &[KeyHint]) {
         .iter()
         .flat_map(|hint| {
             vec![
-                Span::styled(format!(" {} ", hint.key), Style::default().fg(Theme::PRIMARY)),
+                Span::styled(
+                    format!(" {} ", hint.key),
+                    Style::default().fg(Theme::PRIMARY),
+                ),
                 Span::styled(format!("{} ", hint.description), Styles::dim()),
                 Span::raw("│"),
             ]

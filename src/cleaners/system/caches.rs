@@ -70,19 +70,16 @@ impl Cleaner for SystemCachesCleaner {
             ..Default::default()
         };
 
-        let mut result = self.base.scan_dirs(
-            self.id(),
-            &self.paths,
-            &self.safe_boundary(),
-            &options,
-            ctx,
-        );
+        let mut result =
+            self.base
+                .scan_dirs(self.id(), &self.paths, &self.safe_boundary(), &options, ctx);
 
         // Filter out excluded paths
         result.items.retain(|item| {
-            !self.exclude.iter().any(|excl| {
-                item.path.starts_with(excl) || item.path == *excl
-            })
+            !self
+                .exclude
+                .iter()
+                .any(|excl| item.path.starts_with(excl) || item.path == *excl)
         });
 
         // Recalculate total size
@@ -92,6 +89,7 @@ impl Cleaner for SystemCachesCleaner {
     }
 
     fn clean(&self, items: &[CleanableItem], ctx: &CleanerContext) -> CleanResult {
-        self.base.clean_items(self.id(), items, &self.safe_boundary(), ctx)
+        self.base
+            .clean_items(self.id(), items, &self.safe_boundary(), ctx)
     }
 }

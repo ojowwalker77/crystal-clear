@@ -3,116 +3,187 @@
 //! These functions wrap the internal Rust functionality and handle
 //! type conversion to/from FFI-safe types.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::audit::AuditLogger;
-use crate::cleaners::{
-    AppsLeftoversCleaner, CargoCleaner, Cleaner, CleanerContext, DockerCleaner, NpmCleaner,
-    PipCleaner, SystemCachesCleaner, SystemLogsCleaner, TrashCleaner, YarnCleaner,
-};
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 use crate::cleaners::HomebrewCleaner;
 #[cfg(target_os = "macos")]
 use crate::cleaners::XcodeCleaner;
-use crate::config::schema::*;
+use crate::cleaners::{
+    AppsLeftoversCleaner, CargoCleaner, CleanableItem, Cleaner, CleanerContext, DockerCleaner,
+    NpmCleaner, PipCleaner, SystemCachesCleaner, SystemLogsCleaner, TrashCleaner, YarnCleaner,
+};
 use crate::disk;
 use crate::safety::protected_paths;
 use crate::scanner::apps;
 use crate::trash::TrashMover;
 
 use super::types::{
-    FFICategorySize, FFICleanableItem, FFICleanerInfo, FFICleanFailure, FFICleanOptions,
-    FFICleanResult, FFIDiskInfo, FFIDownloadCategory, FFIDownloadsScanOptions,
+    FFICategorySize, FFICleanFailure, FFICleanOptions, FFICleanResult, FFICleanableItem,
+    FFICleanerInfo, FFIDiskInfo, FFIDownloadCategory, FFIDownloadsScanOptions,
     FFIDownloadsScanResult, FFIDuplicateGroup, FFIDuplicateScanOptions, FFIDuplicateScanResult,
     FFIInstalledApp, FFILargeFileScanOptions, FFIScanOptions, FFIScanResult,
 };
 
+fn runtime_config() -> crate::config::Config {
+    crate::config::load_config(None).unwrap_or_default()
+}
+
 /// Get all available cleaners with default configuration.
-fn get_cleaners() -> Vec<Arc<dyn Cleaner>> {
+fn get_cleaners_with_config(config: &crate::config::Config) -> Vec<Arc<dyn Cleaner>> {
     let mut cleaners: Vec<Arc<dyn Cleaner>> = Vec::new();
 
     // Cleaners that need TrashMover
-    if let Ok(tm) = TrashMover::default_mover() {
-        cleaners.push(Arc::new(SystemCachesCleaner::new(
-            tm,
-            AuditLogger::default_logger(false),
-            &CategoryConfig::default(),
-        )));
+    if config.categories.system_cache.enabled {
+        if let Ok(tm) = TrashMover::default_mover() {
+            cleaners.push(Arc::new(SystemCachesCleaner::new(
+                tm,
+                AuditLogger::default_logger(config.safety.audit_enabled),
+                &config.categories.system_cache,
+            )));
+        }
     }
 
-    if let Ok(tm) = TrashMover::default_mover() {
-        cleaners.push(Arc::new(SystemLogsCleaner::new(
-            tm,
-            AuditLogger::default_logger(false),
-            &CategoryConfig::default(),
-        )));
+    if config.categories.system_logs.enabled {
+        if let Ok(tm) = TrashMover::default_mover() {
+            cleaners.push(Arc::new(SystemLogsCleaner::new(
+                tm,
+                AuditLogger::default_logger(config.safety.audit_enabled),
+                &config.categories.system_logs,
+            )));
+        }
     }
 
-    if let Ok(tm) = TrashMover::default_mover() {
-        cleaners.push(Arc::new(NpmCleaner::new(
-            tm,
-            AuditLogger::default_logger(false),
-            &CategoryConfig::default(),
-        )));
+    if config.categories.npm.enabled {
+        if let Ok(tm) = TrashMover::default_mover() {
+            cleaners.push(Arc::new(NpmCleaner::new(
+                tm,
+                AuditLogger::default_logger(config.safety.audit_enabled),
+                &config.categories.npm,
+            )));
+        }
     }
 
-    if let Ok(tm) = TrashMover::default_mover() {
-        cleaners.push(Arc::new(YarnCleaner::new(
-            tm,
-            AuditLogger::default_logger(false),
-            &CategoryConfig::default(),
-        )));
+    if config.categories.yarn.enabled {
+        if let Ok(tm) = TrashMover::default_mover() {
+            cleaners.push(Arc::new(YarnCleaner::new(
+                tm,
+                AuditLogger::default_logger(config.safety.audit_enabled),
+                &config.categories.yarn,
+            )));
+        }
     }
 
-    if let Ok(tm) = TrashMover::default_mover() {
-        cleaners.push(Arc::new(CargoCleaner::new(
-            tm,
-            AuditLogger::default_logger(false),
-            &CargoConfig::default(),
-        )));
+    if config.categories.cargo.base.enabled {
+        if let Ok(tm) = TrashMover::default_mover() {
+            cleaners.push(Arc::new(CargoCleaner::new(
+                tm,
+                AuditLogger::default_logger(config.safety.audit_enabled),
+                &config.categories.cargo,
+            )));
+        }
     }
 
-    if let Ok(tm) = TrashMover::default_mover() {
-        cleaners.push(Arc::new(PipCleaner::new(
-            tm,
-            AuditLogger::default_logger(false),
-            &CategoryConfig::default(),
-        )));
+    if config.categories.pip.enabled {
+        if let Ok(tm) = TrashMover::default_mover() {
+            cleaners.push(Arc::new(PipCleaner::new(
+                tm,
+                AuditLogger::default_logger(config.safety.audit_enabled),
+                &config.categories.pip,
+            )));
+        }
     }
 
     // Cleaners without TrashMover
-    cleaners.push(Arc::new(TrashCleaner::new(
-        AuditLogger::default_logger(false),
-        &TrashConfig::default(),
-    )));
-
-    cleaners.push(Arc::new(DockerCleaner::new(
-        AuditLogger::default_logger(false),
-        &DockerConfig::default(),
-    )));
-
-    cleaners.push(Arc::new(AppsLeftoversCleaner::new(
-        AuditLogger::default_logger(false),
-        &AppsConfig::default(),
-    )));
-
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
-    cleaners.push(Arc::new(HomebrewCleaner::new(
-        AuditLogger::default_logger(false),
-        &HomebrewConfig::default(),
-    )));
-
-    #[cfg(target_os = "macos")]
-    if let Ok(tm) = TrashMover::default_mover() {
-        cleaners.push(Arc::new(XcodeCleaner::new(
-            tm,
-            AuditLogger::default_logger(false),
-            &XcodeConfig::default(),
+    if config.categories.trash.base.enabled {
+        cleaners.push(Arc::new(TrashCleaner::new(
+            AuditLogger::default_logger(config.safety.audit_enabled),
+            &config.categories.trash,
         )));
     }
 
+    if config.categories.docker.base.enabled {
+        cleaners.push(Arc::new(DockerCleaner::new(
+            AuditLogger::default_logger(config.safety.audit_enabled),
+            &config.categories.docker,
+        )));
+    }
+
+    if config.categories.apps.base.enabled {
+        cleaners.push(Arc::new(AppsLeftoversCleaner::new(
+            AuditLogger::default_logger(config.safety.audit_enabled),
+            &config.categories.apps,
+        )));
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    if config.categories.homebrew.base.enabled {
+        cleaners.push(Arc::new(HomebrewCleaner::new(
+            AuditLogger::default_logger(config.safety.audit_enabled),
+            &config.categories.homebrew,
+        )));
+    }
+
+    #[cfg(target_os = "macos")]
+    if config.categories.xcode.base.enabled {
+        if let Ok(tm) = TrashMover::default_mover() {
+            cleaners.push(Arc::new(XcodeCleaner::new(
+                tm,
+                AuditLogger::default_logger(config.safety.audit_enabled),
+                &config.categories.xcode,
+            )));
+        }
+    }
+
     cleaners
+}
+
+fn get_cleaners() -> Vec<Arc<dyn Cleaner>> {
+    let config = runtime_config();
+    get_cleaners_with_config(&config)
+}
+
+fn path_size(path: &PathBuf) -> u64 {
+    if path.is_dir() {
+        walkdir::WalkDir::new(path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter_map(|e| e.metadata().ok())
+            .map(|m| m.len())
+            .sum()
+    } else {
+        std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
+    }
+}
+
+fn build_scan_index(
+    cleaners: &[Arc<dyn Cleaner>],
+    keep_recent_days: u32,
+) -> HashMap<String, (usize, CleanableItem)> {
+    let ctx = CleanerContext {
+        dry_run: true,
+        force: true,
+        keep_recent_days,
+        min_size: None,
+        max_items: None,
+        skip_confirm: true,
+    };
+
+    let mut index = HashMap::new();
+    for (idx, cleaner) in cleaners.iter().enumerate() {
+        if !cleaner.is_available() {
+            continue;
+        }
+        let result = cleaner.scan(&ctx);
+        for item in result.items {
+            index.insert(item.path.to_string_lossy().to_string(), (idx, item));
+        }
+    }
+
+    index
 }
 
 /// Get information about all available cleaners.
@@ -171,9 +242,7 @@ pub fn scan_category(category_id: String, options: FFIScanOptions) -> FFIScanRes
         skip_confirm: true,
     };
 
-    let cleaner = get_cleaners()
-        .into_iter()
-        .find(|c| c.id() == category_id);
+    let cleaner = get_cleaners().into_iter().find(|c| c.id() == category_id);
 
     match cleaner {
         Some(c) if c.is_available() => {
@@ -213,6 +282,9 @@ pub fn clean_items(paths: Vec<String>, options: FFICleanOptions) -> FFICleanResu
     use std::time::Instant;
 
     let start = Instant::now();
+    let config = runtime_config();
+    let cleaners = get_cleaners_with_config(&config);
+    let mut scan_index = build_scan_index(&cleaners, config.general.keep_recent_days);
 
     // Create trash mover
     let mover = match TrashMover::default_mover() {
@@ -234,39 +306,76 @@ pub fn clean_items(paths: Vec<String>, options: FFICleanOptions) -> FFICleanResu
     let mut items_cleaned = 0u32;
     let mut bytes_freed = 0u64;
     let mut failures = Vec::new();
+    let mut manual_paths = Vec::new();
+    let mut grouped_items: HashMap<usize, Vec<CleanableItem>> = HashMap::new();
 
     for path_str in paths {
+        if let Some((cleaner_idx, item)) = scan_index.remove(&path_str) {
+            if item.requires_force && !options.force {
+                failures.push(FFICleanFailure {
+                    path: path_str,
+                    reason: "Requires --force flag".to_string(),
+                });
+                continue;
+            }
+            grouped_items.entry(cleaner_idx).or_default().push(item);
+        } else {
+            manual_paths.push(path_str);
+        }
+    }
+
+    let cleaner_ctx = CleanerContext {
+        dry_run: options.dry_run,
+        force: options.force,
+        keep_recent_days: config.general.keep_recent_days,
+        min_size: None,
+        max_items: None,
+        skip_confirm: true,
+    };
+
+    for (cleaner_idx, cleaner_items) in grouped_items {
+        let result = cleaners[cleaner_idx].clean(&cleaner_items, &cleaner_ctx);
+        items_cleaned += result.items_cleaned as u32;
+        bytes_freed += result.bytes_freed;
+        failures.extend(
+            result
+                .items_failed
+                .into_iter()
+                .map(|(path, reason)| FFICleanFailure {
+                    path: path.to_string_lossy().to_string(),
+                    reason,
+                }),
+        );
+    }
+
+    // Fallback: manually clean paths that don't belong to a cleaner category
+    // (e.g. large files / duplicate files / downloads).
+    for path_str in manual_paths {
         let path = PathBuf::from(&path_str);
 
+        if crate::safety::is_protected(&path) {
+            failures.push(FFICleanFailure {
+                path: path_str,
+                reason: format!("SAFETY VIOLATION: '{}' is protected", path.display()),
+            });
+            continue;
+        }
+
         if options.dry_run {
-            // In dry run, just count what would be cleaned
-            if let Ok(metadata) = std::fs::metadata(&path) {
-                if metadata.is_dir() {
-                    bytes_freed += walkdir::WalkDir::new(&path)
-                        .into_iter()
-                        .filter_map(|e| e.ok())
-                        .filter_map(|e| e.metadata().ok())
-                        .map(|m| m.len())
-                        .sum::<u64>();
-                } else {
-                    bytes_freed += metadata.len();
-                }
+            if path.exists() {
+                bytes_freed += path_size(&path);
                 items_cleaned += 1;
+            } else {
+                failures.push(FFICleanFailure {
+                    path: path_str,
+                    reason: "Path not found".to_string(),
+                });
             }
             continue;
         }
 
-        // Get size before cleaning
-        let size = if path.is_dir() {
-            walkdir::WalkDir::new(&path)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .filter_map(|e| e.metadata().ok())
-                .map(|m| m.len())
-                .sum()
-        } else {
-            std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0)
-        };
+        // Get size before cleaning.
+        let size = path_size(&path);
 
         match mover.move_to_trash(&path) {
             Ok(_) => {
@@ -283,7 +392,7 @@ pub fn clean_items(paths: Vec<String>, options: FFICleanOptions) -> FFICleanResu
     }
 
     FFICleanResult {
-        category: "manual".to_string(),
+        category: "mixed".to_string(),
         items_cleaned,
         bytes_freed,
         failures,

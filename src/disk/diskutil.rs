@@ -7,10 +7,7 @@ use super::{DiskInfo, SmartStatus};
 /// Get disk info for a mount point.
 pub fn get_disk_info(mount_point: &str) -> Option<DiskInfo> {
     // Use df to get disk space info
-    let output = Command::new("df")
-        .args(["-k", mount_point])
-        .output()
-        .ok()?;
+    let output = Command::new("df").args(["-k", mount_point]).output().ok()?;
 
     if !output.status.success() {
         return None;
@@ -38,9 +35,8 @@ pub fn get_disk_info(mount_point: &str) -> Option<DiskInfo> {
     let free_kb: u64 = available_kb;
 
     // Get more info from diskutil
-    let (name, filesystem) = get_diskutil_info(&device_node).unwrap_or_else(|| {
-        ("Unknown".to_string(), "Unknown".to_string())
-    });
+    let (name, filesystem) = get_diskutil_info(&device_node)
+        .unwrap_or_else(|| ("Unknown".to_string(), "Unknown".to_string()));
 
     Some(DiskInfo {
         name,

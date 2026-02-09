@@ -62,15 +62,15 @@ impl SafeBoundary {
             if canonical.starts_with(&root_canonical) {
                 // Check depth if specified
                 if let Some(max_depth) = self.max_depth {
-                    let relative = canonical
-                        .strip_prefix(&root_canonical)
-                        .map_err(|_| CleanmacError::Filesystem {
+                    let relative = canonical.strip_prefix(&root_canonical).map_err(|_| {
+                        CleanmacError::Filesystem {
                             path: path.to_path_buf(),
                             source: std::io::Error::new(
                                 std::io::ErrorKind::Other,
                                 "Failed to compute relative path",
                             ),
-                        })?;
+                        }
+                    })?;
                     let depth = relative.components().count();
                     if depth > max_depth {
                         return Ok(false);
@@ -125,10 +125,7 @@ pub mod presets {
     /// Create a boundary for user cache directories.
     pub fn user_caches() -> SafeBoundary {
         let home = dirs::home_dir().expect("Home directory required");
-        SafeBoundary::new(
-            vec![home.join("Library/Caches")],
-            "User cache directories",
-        )
+        SafeBoundary::new(vec![home.join("Library/Caches")], "User cache directories")
     }
 
     /// Create a boundary for user log directories.
@@ -202,10 +199,7 @@ pub mod presets {
     pub fn pip() -> SafeBoundary {
         let home = dirs::home_dir().expect("Home directory required");
         SafeBoundary::new(
-            vec![
-                home.join("Library/Caches/pip"),
-                home.join(".cache/pip"),
-            ],
+            vec![home.join("Library/Caches/pip"), home.join(".cache/pip")],
             "pip cache",
         )
     }

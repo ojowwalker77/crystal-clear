@@ -79,10 +79,12 @@ impl TrashMover {
             ValidationResult::HardProtected { reason: _ } => Err(CleanmacError::ProtectedPath {
                 path: path.to_path_buf(),
             }),
-            ValidationResult::BoundaryViolation { reason: _ } => Err(CleanmacError::BoundaryEscape {
-                path: path.to_path_buf(),
-                resolved: path.canonicalize().unwrap_or_else(|_| path.to_path_buf()),
-            }),
+            ValidationResult::BoundaryViolation { reason: _ } => {
+                Err(CleanmacError::BoundaryEscape {
+                    path: path.to_path_buf(),
+                    resolved: path.canonicalize().unwrap_or_else(|_| path.to_path_buf()),
+                })
+            }
             ValidationResult::UserExcluded => Err(CleanmacError::TrashFailed {
                 path: path.to_path_buf(),
                 reason: "Path is excluded by user configuration".to_string(),

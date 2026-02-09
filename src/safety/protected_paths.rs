@@ -107,7 +107,6 @@ pub static PROTECTED_USER_PATHS: Lazy<Vec<&'static str>> = Lazy::new(|| {
         // Core user directories (cross-platform)
         "Desktop",
         "Documents",
-        "Downloads",
         // Security-critical directories (cross-platform)
         ".ssh",
         ".gnupg",
@@ -193,21 +192,13 @@ pub static PROTECTED_PATTERNS: Lazy<Vec<&'static str>> = Lazy::new(|| {
     // macOS-specific patterns
     #[cfg(target_os = "macos")]
     {
-        patterns.extend([
-            "*.mobileprovision",
-            ".DS_Store",
-            ".localized",
-        ]);
+        patterns.extend(["*.mobileprovision", ".DS_Store", ".localized"]);
     }
 
     // Windows-specific patterns
     #[cfg(target_os = "windows")]
     {
-        patterns.extend([
-            "desktop.ini",
-            "thumbs.db",
-            "Thumbs.db",
-        ]);
+        patterns.extend(["desktop.ini", "thumbs.db", "Thumbs.db"]);
     }
 
     patterns
@@ -277,7 +268,9 @@ pub fn matches_protected_pattern(path: &std::path::Path) -> bool {
 pub fn is_protected(path: &std::path::Path) -> bool {
     // Get both original and canonical paths for checking
     let original_path = path.to_path_buf();
-    let canonical_path = path.canonicalize().unwrap_or_else(|_| original_path.clone());
+    let canonical_path = path
+        .canonicalize()
+        .unwrap_or_else(|_| original_path.clone());
 
     // Check file patterns first (like .keychain, .git, etc)
     if matches_protected_pattern(&original_path) || matches_protected_pattern(&canonical_path) {
@@ -323,10 +316,7 @@ pub fn is_protected(path: &std::path::Path) -> bool {
         None => return false,
     };
 
-    let protected_trees: Vec<PathBuf> = PROTECTED_USER_PATHS
-        .iter()
-        .map(|p| home.join(p))
-        .collect();
+    let protected_trees: Vec<PathBuf> = PROTECTED_USER_PATHS.iter().map(|p| home.join(p)).collect();
 
     // Check if path is under a protected user tree (Documents, Desktop, .ssh, etc)
     for protected_path in &protected_trees {
@@ -337,7 +327,9 @@ pub fn is_protected(path: &std::path::Path) -> bool {
 
     // System paths - exact match only (check both original and canonical)
     // We protect the directories themselves, not their children
-    if PROTECTED_SYSTEM_PATHS.contains(&original_path) || PROTECTED_SYSTEM_PATHS.contains(&canonical_path) {
+    if PROTECTED_SYSTEM_PATHS.contains(&original_path)
+        || PROTECTED_SYSTEM_PATHS.contains(&canonical_path)
+    {
         return true;
     }
 

@@ -24,7 +24,7 @@ System Paths:
 /cores               /opt                 /Volumes
 
 User Paths:
-~/Documents          ~/Desktop            ~/Downloads
+~/Documents          ~/Desktop
 ~/Movies             ~/Music              ~/Pictures
 ~/Public             ~/.ssh               ~/.gnupg
 ~/.aws               ~/.kube

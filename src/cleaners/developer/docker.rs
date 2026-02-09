@@ -66,20 +66,24 @@ fn parse_docker_size(s: &str) -> Option<u64> {
     }
 
     let (num_str, multiplier) = if s.ends_with("TB") {
-        (&s[..s.len()-2], 1024u64 * 1024 * 1024 * 1024)
+        (&s[..s.len() - 2], 1024u64 * 1024 * 1024 * 1024)
     } else if s.ends_with("GB") {
-        (&s[..s.len()-2], 1024u64 * 1024 * 1024)
+        (&s[..s.len() - 2], 1024u64 * 1024 * 1024)
     } else if s.ends_with("MB") {
-        (&s[..s.len()-2], 1024u64 * 1024)
+        (&s[..s.len() - 2], 1024u64 * 1024)
     } else if s.ends_with("KB") {
-        (&s[..s.len()-2], 1024u64)
+        (&s[..s.len() - 2], 1024u64)
     } else if s.ends_with("B") {
-        (&s[..s.len()-1], 1u64)
+        (&s[..s.len() - 1], 1u64)
     } else {
         return None;
     };
 
-    num_str.trim().parse::<f64>().ok().map(|n| (n * multiplier as f64) as u64)
+    num_str
+        .trim()
+        .parse::<f64>()
+        .ok()
+        .map(|n| (n * multiplier as f64) as u64)
 }
 
 impl Cleaner for DockerCleaner {
@@ -148,16 +152,14 @@ impl Cleaner for DockerCleaner {
 
         // Get unused images (if not dangling_only)
         if !self.dangling_only {
-            if let Ok(output) = Command::new("docker")
-                .args(["images", "-q"])
-                .output()
-            {
+            if let Ok(output) = Command::new("docker").args(["images", "-q"]).output() {
                 if output.status.success() {
                     let stdout = String::from_utf8_lossy(&output.stdout);
                     for line in stdout.lines() {
                         if !line.trim().is_empty() {
                             // Check if already added
-                            let path = std::path::PathBuf::from(format!("docker:image:{}", line.trim()));
+                            let path =
+                                std::path::PathBuf::from(format!("docker:image:{}", line.trim()));
                             if !items.iter().any(|i| i.path == path) {
                                 items.push(CleanableItem {
                                     path,
@@ -199,7 +201,10 @@ impl Cleaner for DockerCleaner {
                     for line in stdout.lines() {
                         if !line.trim().is_empty() {
                             items.push(CleanableItem {
-                                path: std::path::PathBuf::from(format!("docker:volume:{}", line.trim())),
+                                path: std::path::PathBuf::from(format!(
+                                    "docker:volume:{}",
+                                    line.trim()
+                                )),
                                 size: 0,
                                 item_type: ItemType::Directory,
                                 age_days: None,
@@ -231,7 +236,9 @@ impl Cleaner for DockerCleaner {
 
         if ctx.dry_run {
             for item in items {
-                let _ = self.audit_logger.log_dry_run(self.id(), &item.path, item.size);
+                let _ = self
+                    .audit_logger
+                    .log_dry_run(self.id(), &item.path, item.size);
             }
             return CleanResult {
                 category: self.id().to_string(),
@@ -257,23 +264,31 @@ impl Cleaner for DockerCleaner {
                 let id = &path_str["docker:volume:".len()..];
                 Command::new("docker").args(["volume", "rm", id]).output()
             } else if path_str == "docker:buildcache" {
-                Command::new("docker").args(["builder", "prune", "-f"]).output()
+                Command::new("docker")
+                    .args(["builder", "prune", "-f"])
+                    .output()
             } else {
                 continue;
             };
 
             match result {
                 Ok(o) if o.status.success() => {
-                    let _ = self.audit_logger.log_cleaned(self.id(), &item.path, item.size);
+                    let _ = self
+                        .audit_logger
+                        .log_cleaned(self.id(), &item.path, item.size);
                     cleaned += 1;
                 }
                 Ok(o) => {
                     let error_msg = String::from_utf8_lossy(&o.stderr).to_string();
-                    let _ = self.audit_logger.log_error(self.id(), &item.path, &error_msg);
+                    let _ = self
+                        .audit_logger
+                        .log_error(self.id(), &item.path, &error_msg);
                     failed.push((item.path.clone(), error_msg));
                 }
                 Err(e) => {
-                    let _ = self.audit_logger.log_error(self.id(), &item.path, &e.to_string());
+                    let _ = self
+                        .audit_logger
+                        .log_error(self.id(), &item.path, &e.to_string());
                     failed.push((item.path.clone(), e.to_string()));
                 }
             }

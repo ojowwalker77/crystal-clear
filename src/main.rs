@@ -23,6 +23,10 @@ fn main() -> io::Result<()> {
         config::Config::default()
     });
 
+    if let Err(e) = config::validate_config(&config) {
+        eprintln!("Warning: Config validation failed: {}", e);
+    }
+
     // Initialize terminal
     let terminal = ratatui::init();
 

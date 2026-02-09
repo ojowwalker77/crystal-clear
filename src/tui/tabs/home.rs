@@ -1,44 +1,39 @@
 //! Home tab - two-column view for cleaning and app management.
 
+use chrono::Local;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Row, Table};
 use ratatui::Frame;
 
-use crate::tui::app::{App, FocusPanel};
+use crate::cleaners::RiskLevel;
+use crate::tui::app::{App, FocusPanel, RowCleanStatus};
 use crate::tui::theme::{Styles, Theme};
 use crate::tui::widgets::{disk_gauge, format_size, loading_indicator};
 
 /// Render the home tab.
 pub fn render(app: &mut App, frame: &mut Frame, area: Rect) {
-    // Layout: disk bar (2 lines) | status (1 line) | two columns | summary (2 lines)
+    // Layout: disk bar | status | last report | two columns | selection summary
     let layout = Layout::vertical([
-        Constraint::Length(2),  // Disk bar + label
-        Constraint::Length(2),  // Status/progress
-        Constraint::Min(5),     // Two-column area
-        Constraint::Length(2),  // Selection summary
+        Constraint::Length(2),
+        Constraint::Length(2),
+        Constraint::Length(1),
+        Constraint::Min(5),
+        Constraint::Length(2),
     ])
     .split(area);
 
-    // Disk usage - compact
     render_disk_bar(app, frame, layout[0]);
-
-    // Status line
     render_status(app, frame, layout[1]);
+    render_report_strip(app, frame, layout[2]);
 
-    // Two columns: cleanable items | apps
-    let columns = Layout::horizontal([
-        Constraint::Percentage(50),
-        Constraint::Percentage(50),
-    ])
-    .split(layout[2]);
-
+    let columns = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(layout[3]);
     render_clean_panel(app, frame, columns[0]);
     render_apps_panel(app, frame, columns[1]);
 
-    // Selection summary
-    render_summary(app, frame, layout[3]);
+    render_summary(app, frame, layout[4]);
 }
 
 fn render_disk_bar(app: &App, frame: &mut Frame, area: Rect) {
@@ -64,6 +59,11 @@ fn render_status(app: &App, frame: &mut Frame, area: Rect) {
             Span::styled("  ", Style::default().fg(Theme::WARNING)),
             Span::raw(msg),
         ])
+    } else if app.clean.cleaning {
+        Line::from(vec![
+            Span::styled("  ", Style::default().fg(Theme::PRIMARY)),
+            Span::raw("Cleaning selected items..."),
+        ])
     } else if is_scanning {
         let msg = app
             .scan
@@ -82,37 +82,87 @@ fn render_status(app: &App, frame: &mut Frame, area: Rect) {
             Span::raw(" to scan"),
         ])
     } else {
+        let visible = app.visible_clean_indices().len();
         Line::from(vec![
             Span::styled("  ", Style::default().fg(Theme::SUCCESS)),
             Span::raw(format!(
-                "{} cleanable  |  {} apps  |  ",
+                "{} cleanable ({} shown)  |  {} apps  |  ",
                 app.clean.items.len(),
+                visible,
                 app.apps.apps.len()
             )),
             Span::styled("h/l", Style::default().fg(Theme::PRIMARY)),
             Span::raw(" switch  "),
             Span::styled("Space", Style::default().fg(Theme::PRIMARY)),
             Span::raw(" select  "),
-            Span::styled("c", Style::default().fg(Theme::PRIMARY)),
-            Span::raw(" clean"),
+            Span::styled("z", Style::default().fg(Theme::PRIMARY)),
+            Span::raw(" 0 B"),
         ])
     };
 
-    // Add spinner for active operations
-    if app.dashboard.discovering || is_scanning {
-        let spinner_area = Rect::new(area.x, area.y, area.width, 1);
+    if app.dashboard.discovering || is_scanning || app.clean.cleaning {
         loading_indicator(
             frame,
-            spinner_area,
+            Rect::new(area.x, area.y, area.width, 1),
             if app.dashboard.discovering {
-                app.dashboard.discovery_progress.as_deref().unwrap_or("Discovering...")
+                app.dashboard
+                    .discovery_progress
+                    .as_deref()
+                    .unwrap_or("Discovering...")
+            } else if app.clean.cleaning {
+                "Cleaning selected items..."
             } else {
-                app.scan.progress_message.as_deref().unwrap_or("Scanning...")
+                app.scan
+                    .progress_message
+                    .as_deref()
+                    .unwrap_or("Scanning...")
             },
         );
     } else {
         frame.render_widget(Paragraph::new(status), area);
     }
+}
+
+fn render_report_strip(app: &App, frame: &mut Frame, area: Rect) {
+    let line = if let Some(report) = &app.clean.clean_report {
+        let completed_local = report.completed_at.with_timezone(&Local);
+        Line::from(vec![
+            Span::raw(" Last clean "),
+            Span::styled(
+                completed_local.format("%H:%M:%S").to_string(),
+                Style::default().fg(Theme::PRIMARY),
+            ),
+            Span::raw("  "),
+            Span::styled(
+                format!("cleaned {}", report.cleaned_count),
+                Style::default().fg(Theme::SUCCESS),
+            ),
+            Span::raw("  "),
+            Span::styled(
+                format!("failed {}", report.failed_count),
+                if report.failed_count > 0 {
+                    Styles::error()
+                } else {
+                    Styles::dim()
+                },
+            ),
+            Span::raw("  "),
+            Span::styled(
+                format!("freed {}", format_size(report.bytes_freed)),
+                Style::default().fg(Theme::SUCCESS),
+            ),
+            Span::raw("  |  "),
+            Span::styled("v", Style::default().fg(Theme::PRIMARY)),
+            Span::raw(" full report"),
+        ])
+    } else {
+        Line::from(vec![
+            Span::raw(" "),
+            Span::styled("No clean report yet", Styles::dim()),
+        ])
+    };
+
+    frame.render_widget(Paragraph::new(line), area);
 }
 
 fn render_clean_panel(app: &mut App, frame: &mut Frame, area: Rect) {
@@ -139,27 +189,54 @@ fn render_clean_panel(app: &mut App, frame: &mut Frame, area: Rect) {
         return;
     }
 
-    // Build table rows
-    let rows: Vec<Row> = app
-        .clean
-        .items
+    let visible = app.visible_clean_indices();
+    if visible.is_empty() {
+        let empty = Paragraph::new(vec![
+            Line::from(""),
+            Line::from(vec![Span::styled("  All rows hidden (0 B)", Styles::dim())]),
+            Line::from(vec![
+                Span::raw("  Press "),
+                Span::styled("z", Style::default().fg(Theme::PRIMARY)),
+                Span::raw(" to show"),
+            ]),
+        ])
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(border_style)
+                .title(" Cleanable "),
+        );
+        frame.render_widget(empty, area);
+        return;
+    }
+
+    let rows: Vec<Row> = visible
         .iter()
         .enumerate()
-        .map(|(idx, item)| {
-            let selected = app.clean.table_state.selected() == Some(idx);
+        .map(|(visible_idx, item_idx)| {
+            let item = &app.clean.items[*item_idx];
+            let selected = app.clean.table_state.selected() == Some(visible_idx);
             let checkbox = if item.selected { "[x]" } else { "[ ]" };
 
-            let style = if selected && is_focused {
-                Style::default().add_modifier(Modifier::REVERSED)
-            } else if item.selected {
-                Style::default().fg(Theme::SUCCESS)
-            } else {
-                Style::default()
+            let mut style = match item.clean_status {
+                Some(RowCleanStatus::Cleaned) => Style::default().fg(Theme::SUCCESS),
+                Some(RowCleanStatus::Failed) => Style::default().fg(Theme::ERROR),
+                Some(RowCleanStatus::Skipped) => Style::default().fg(Theme::WARNING),
+                Some(RowCleanStatus::Pending) => Style::default().fg(Theme::PRIMARY),
+                None => Style::default(),
             };
+            if selected && is_focused {
+                style = style.add_modifier(Modifier::REVERSED);
+            } else if item.selected {
+                style = style.add_modifier(Modifier::BOLD);
+            }
 
             Row::new(vec![
                 checkbox.to_string(),
-                truncate_path(&item.item.path.to_string_lossy(), 25),
+                clean_status_label(item.clean_status).to_string(),
+                risk_badge(item.item.risk_level).to_string(),
+                category_short_label(&item.category).to_string(),
+                truncate_path(&item.item.path.to_string_lossy(), 26),
                 format_size(item.item.size),
             ])
             .style(style)
@@ -170,12 +247,15 @@ fn render_clean_panel(app: &mut App, frame: &mut Frame, area: Rect) {
         rows,
         [
             Constraint::Length(4),  // Checkbox
-            Constraint::Min(15),    // Path
+            Constraint::Length(6),  // Result
+            Constraint::Length(3),  // Risk
+            Constraint::Length(8),  // Category
+            Constraint::Min(12),    // Path
             Constraint::Length(10), // Size
         ],
     )
     .header(
-        Row::new(vec!["", "Path", "Size"])
+        Row::new(vec!["", "Res", "R", "Cat", "Path", "Size"])
             .style(Style::default().add_modifier(Modifier::BOLD))
             .bottom_margin(1),
     )
@@ -217,7 +297,6 @@ fn render_apps_panel(app: &mut App, frame: &mut Frame, area: Rect) {
         return;
     }
 
-    // Build table rows
     let rows: Vec<Row> = app
         .apps
         .apps
@@ -235,13 +314,13 @@ fn render_apps_panel(app: &mut App, frame: &mut Frame, area: Rect) {
                 String::new()
             };
 
-            let style = if selected && is_focused {
-                Style::default().add_modifier(Modifier::REVERSED)
-            } else if checked {
-                Style::default().fg(Theme::WARNING)
-            } else {
-                Style::default()
-            };
+            let mut style = Style::default();
+            if checked {
+                style = Style::default().fg(Theme::WARNING);
+            }
+            if selected && is_focused {
+                style = style.add_modifier(Modifier::REVERSED);
+            }
 
             Row::new(vec![
                 checkbox.to_string(),
@@ -256,10 +335,10 @@ fn render_apps_panel(app: &mut App, frame: &mut Frame, area: Rect) {
     let table = Table::new(
         rows,
         [
-            Constraint::Length(4),  // Checkbox
-            Constraint::Min(12),    // Name
-            Constraint::Length(10), // Size
-            Constraint::Length(10), // Leftovers
+            Constraint::Length(4),
+            Constraint::Min(12),
+            Constraint::Length(10),
+            Constraint::Length(10),
         ],
     )
     .header(
@@ -278,59 +357,89 @@ fn render_apps_panel(app: &mut App, frame: &mut Frame, area: Rect) {
 }
 
 fn render_summary(app: &App, frame: &mut Frame, area: Rect) {
-    let clean_selected = app.clean.selected_count > 0;
-    let apps_selected = !app.apps.selected_for_uninstall.is_empty();
+    let apps_selected = app.apps.selected_for_uninstall.len();
+    let apps_selected_size: u64 = app
+        .apps
+        .selected_for_uninstall
+        .iter()
+        .filter_map(|&idx| app.apps.apps.get(idx))
+        .map(|item| item.size + item.leftover_size)
+        .sum();
 
-    let summary = if clean_selected || apps_selected {
-        let mut parts = vec![Span::raw("  ")];
-
-        if clean_selected {
-            parts.push(Span::styled(
-                format!("{} items", app.clean.selected_count),
-                Style::default().fg(Theme::PRIMARY),
-            ));
-            parts.push(Span::raw(" ("));
-            parts.push(Span::styled(
-                format_size(app.clean.selected_size),
-                Style::default().fg(Theme::SUCCESS),
-            ));
-            parts.push(Span::raw(")"));
-        }
-
-        if apps_selected {
-            if clean_selected {
-                parts.push(Span::raw("  +  "));
-            }
-            let apps_count = app.apps.selected_for_uninstall.len();
-            let apps_size: u64 = app
-                .apps
-                .selected_for_uninstall
-                .iter()
-                .filter_map(|&i| app.apps.apps.get(i))
-                .map(|a| a.size + a.leftover_size)
-                .sum();
-            parts.push(Span::styled(
-                format!("{} apps", apps_count),
-                Style::default().fg(Theme::WARNING),
-            ));
-            parts.push(Span::raw(" ("));
-            parts.push(Span::styled(
-                format_size(apps_size),
-                Style::default().fg(Theme::SUCCESS),
-            ));
-            parts.push(Span::raw(")"));
-        }
-
-        parts.push(Span::raw("  |  Press "));
-        parts.push(Span::styled("c", Style::default().fg(Theme::PRIMARY)));
-        parts.push(Span::raw(" to clean"));
-
-        Line::from(parts)
-    } else {
-        Line::from(vec![Span::styled("  No items selected", Styles::dim())])
-    };
+    let summary = Line::from(vec![
+        Span::raw(" Selected "),
+        Span::styled(
+            format!("{} items", app.clean.selected_count),
+            Style::default().fg(Theme::PRIMARY),
+        ),
+        Span::raw(" ("),
+        Span::styled(
+            format_size(app.clean.selected_size),
+            Style::default().fg(Theme::SUCCESS),
+        ),
+        Span::raw(")  "),
+        Span::styled(
+            format!(
+                "risk L/M/H {}/{}/{}",
+                app.clean.selected_low_risk,
+                app.clean.selected_medium_risk,
+                app.clean.selected_high_risk
+            ),
+            Styles::dim(),
+        ),
+        Span::raw("  |  "),
+        Span::styled(
+            format!("{} apps", apps_selected),
+            Style::default().fg(Theme::WARNING),
+        ),
+        Span::raw(" ("),
+        Span::styled(
+            format_size(apps_selected_size),
+            Style::default().fg(Theme::SUCCESS),
+        ),
+        Span::raw(")  |  "),
+        Span::raw("Press "),
+        Span::styled("c", Style::default().fg(Theme::PRIMARY)),
+        Span::raw(" clean"),
+    ]);
 
     frame.render_widget(Paragraph::new(summary), area);
+}
+
+fn clean_status_label(status: Option<RowCleanStatus>) -> &'static str {
+    match status {
+        Some(RowCleanStatus::Pending) => "RUN",
+        Some(RowCleanStatus::Cleaned) => "OK",
+        Some(RowCleanStatus::Failed) => "FAIL",
+        Some(RowCleanStatus::Skipped) => "SKIP",
+        None => "",
+    }
+}
+
+fn risk_badge(risk: RiskLevel) -> &'static str {
+    match risk {
+        RiskLevel::Low => "L",
+        RiskLevel::Medium => "M",
+        RiskLevel::High => "H",
+    }
+}
+
+fn category_short_label(category: &str) -> &'static str {
+    let key = category.to_lowercase();
+    match key.as_str() {
+        "system-cache" => "CACHE",
+        "system-logs" => "LOGS",
+        "trash" => "TRASH",
+        "xcode" => "XCODE",
+        "npm" => "NPM",
+        "yarn" => "YARN",
+        "cargo" => "CARGO",
+        "pip" => "PIP",
+        "homebrew" => "BREW",
+        "docker" => "DOCKER",
+        "apps" => "APPS",
+        _ => "OTHER",
+    }
 }
 
 fn truncate_path(path: &str, max: usize) -> String {

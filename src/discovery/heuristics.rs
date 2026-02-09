@@ -21,7 +21,11 @@ pub fn detect_cleanable_directory(path: &Path) -> Option<(PathCategory, f64)> {
         ("library/logs/", PathCategory::Logs, 0.95),
         // Build artifacts
         ("deriveddata", PathCategory::Build, 0.95),
-        ("library/developer/xcode/deriveddata", PathCategory::Build, 0.98),
+        (
+            "library/developer/xcode/deriveddata",
+            PathCategory::Build,
+            0.98,
+        ),
         // Package manager caches
         (".npm/_cacache", PathCategory::Cache, 0.95),
         (".cargo/registry/cache", PathCategory::Cache, 0.95),

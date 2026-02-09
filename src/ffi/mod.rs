@@ -7,9 +7,9 @@
 //! Uses UniFFI's proc-macro approach for simpler setup.
 //! The scaffolding is set up in lib.rs.
 
-mod types;
 mod conversions;
 mod core;
+mod types;
 
-pub use types::*;
 pub use core::*;
+pub use types::*;
